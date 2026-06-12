@@ -36,6 +36,16 @@ Drag the downloaded `.zip` onto the page (no need to unzip). The app:
 
 Click **Try sample data** to see it working without a real export.
 
+## Follow up (semi-automated sending)
+
+The **✉️ Follow up** tab turns scan results — or your own list — into ready-to-send DMs:
+
+- Write one message template with placeholders: `{name}` (first name), `{full_name}`, `{username}`, or any column from your CSV (e.g. `{topic}`)
+- The list defaults to people who haven't responded, or **import a CSV** / **paste rows straight from Excel or Google Sheets** (see [sample-list.csv](sample-list.csv) — needs a `username` or `name` header)
+- Each row gets a **Copy & open DM** button: it copies the personalized message and opens that person's DM thread (`ig.me/m/<username>`) — you paste and hit send
+
+Sending is deliberately manual. Instagram has no API that lets personal accounts send DMs, and unattended auto-senders are the fastest way to get an account disabled. One human click per send keeps you safe.
+
 ## Notes
 
 - Works with the export's `your_instagram_activity/messages/inbox/…/message_*.json` layout (older exports with `messages/inbox/…` work too). Group chats are supported.

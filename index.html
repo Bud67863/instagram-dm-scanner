@@ -159,6 +159,25 @@
   .steps .why { color: var(--muted); font-size: 12.5px; }
   .steps .why.critical { color: var(--accent2); font-weight: 600; }
 
+  .fu-panel { display: none; margin-top: 14px; }
+  .fu-panel.visible { display: block; }
+  .fu-panel #fuTable { display: table; }
+  .fu-config { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .fu-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
+  .fu-config textarea {
+    width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit; resize: vertical;
+  }
+  .fu-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .fu-actionsbar { margin-top: 12px; }
+  .fu-actionsbar .chk { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .fu-note { margin-top: 12px; font-size: 12.5px; color: var(--accent2); line-height: 1.5; }
+  #pasteArea { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .fu-msgtext { white-space: pre-wrap; }
+  .fu-done td { opacity: .45; }
+  .fu-done .fu-msgtext { text-decoration: line-through; }
+  .fu-actions button { margin: 2px 6px 2px 0; white-space: nowrap; }
+
   .err { display:none; margin-top: 16px; background: rgba(255,92,92,.1); border: 1px solid rgba(255,92,92,.4); color: #ffb4b4; padding: 12px 16px; border-radius: var(--radius); font-size: 13px; }
   .err.visible { display: block; }
   #fileInputZip, #fileInputDir { display: none; }
@@ -234,6 +253,7 @@
   <div class="tabs" id="tabs">
     <button class="tab active" data-tab="threads">By conversation</button>
     <button class="tab" data-tab="people">By person</button>
+    <button class="tab" data-tab="followup">✉️ Follow up</button>
   </div>
 
   <div class="toolbar" id="toolbar">
@@ -251,6 +271,30 @@
     <thead><tr><th>Person</th><th>Response types</th><th>Conversations</th><th>Last response</th></tr></thead>
     <tbody></tbody>
   </table>
+
+  <div class="fu-panel" id="followupPanel">
+    <div class="fu-config">
+      <label class="fu-label">Message template &mdash; placeholders: <code>{name}</code> (first name), <code>{full_name}</code>, <code>{username}</code>, or any column from your CSV like <code>{city}</code></label>
+      <textarea id="fuTemplate" rows="3">Hey {name}! Just bumping this back to the top of your inbox 🙂</textarea>
+      <div class="fu-row fu-actionsbar">
+        <button id="btnCsvImport">📄 Import CSV file</button>
+        <button id="btnPasteCsv">📋 Paste from spreadsheet</button>
+        <label class="chk" id="fuScanFilterWrap"><input type="checkbox" id="fuOnlySilent" checked> only people who haven't responded</label>
+        <button id="btnClearList" style="display:none">✕ Clear imported list</button>
+      </div>
+      <div id="pasteArea" style="display:none">
+        <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen"></textarea>
+        <button class="primary" id="btnDoPaste">Import pasted rows</button>
+      </div>
+      <p class="fu-note">Sends stay manual by design: each button copies the personalized message and opens that person&rsquo;s DM &mdash; you paste and hit send. Fully automated senders are Instagram&rsquo;s fastest route to a disabled account.</p>
+    </div>
+    <input type="file" id="fileInputCsv" accept=".csv,.tsv,.txt" style="display:none">
+    <table id="fuTable">
+      <thead><tr><th>Person</th><th>Message (ready to send)</th><th style="width:240px"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p id="fuEmpty" class="muted" style="display:none;margin-top:14px"></p>
+  </div>
 </div>
 
 <script>
@@ -259,6 +303,7 @@
   let threads = [];        // [{ path, title, participants:[names], messages:[...] }]
   let analysis = null;     // result of analyze()
   let activeTab = 'threads';
+  let fuImported = null;   // follow-up list from CSV import, or null to derive from scan
 
   const $ = id => document.getElementById(id);
 
@@ -489,9 +534,15 @@
       pb.appendChild(tr);
     }
 
-    // tab visibility
-    $('threadTable').classList.toggle('visible', activeTab === 'threads');
-    $('peopleTable').classList.toggle('visible', activeTab === 'people');
+    renderFollowup();
+    updatePanels();
+  }
+
+  function updatePanels() {
+    $('threadTable').classList.toggle('visible', activeTab === 'threads' && !!analysis);
+    $('peopleTable').classList.toggle('visible', activeTab === 'people' && !!analysis);
+    $('followupPanel').classList.toggle('visible', activeTab === 'followup');
+    $('toolbar').style.display = activeTab === 'followup' ? 'none' : '';
   }
 
   function esc(s) {
@@ -502,6 +553,146 @@
     analysis = analyze();
     ['controls', 'stats', 'tabs', 'toolbar'].forEach(id => $(id).classList.add('visible'));
     render();
+  }
+
+  // ---------- follow-up ----------
+  // Real export thread folders look like "<username>_<threadid>"
+  function deriveUsername(path) {
+    const m = String(path).match(/^([a-z0-9._]+)_\d+$/i);
+    return m ? m[1].toLowerCase() : null;
+  }
+
+  function parseDelimited(text) {
+    const delim = text.split('\n')[0].includes('\t') ? '\t' : ',';
+    const rows = [];
+    let row = [], cur = '', inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQ) {
+        if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+        else cur += c;
+      } else if (c === '"') inQ = true;
+      else if (c === delim) { row.push(cur); cur = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(cur); cur = '';
+        if (row.some(x => x.trim() !== '')) rows.push(row);
+        row = [];
+      } else cur += c;
+    }
+    row.push(cur);
+    if (row.some(x => x.trim() !== '')) rows.push(row);
+    return rows;
+  }
+
+  function importList(text) {
+    const rows = parseDelimited(text);
+    if (rows.length < 2) throw new Error('Need a header row plus at least one person.');
+    const headers = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+    const uIdx = headers.findIndex(h => ['username', 'handle', 'ig', 'insta', 'instagram', 'user'].includes(h));
+    const nIdx = headers.findIndex(h => ['name', 'full_name', 'first_name', 'person'].includes(h));
+    if (uIdx === -1 && nIdx === -1) throw new Error('No "username" or "name" column found. Your headers: ' + headers.join(', '));
+    fuImported = rows.slice(1).map(r => {
+      const fields = {};
+      headers.forEach((h, i) => fields[h] = (r[i] || '').trim());
+      const username = uIdx >= 0 ? fields[headers[uIdx]].replace(/^@/, '').toLowerCase() : '';
+      const full_name = (nIdx >= 0 && fields[headers[nIdx]]) ? fields[headers[nIdx]] : username;
+      return { username, full_name, fields };
+    }).filter(p => p.username || p.full_name);
+    $('btnClearList').style.display = '';
+    $('fuScanFilterWrap').style.display = 'none';
+    $('pasteArea').style.display = 'none';
+    $('tabs').classList.add('visible');
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === 'followup'));
+    activeTab = 'followup';
+    renderFollowup();
+    updatePanels();
+  }
+
+  function followupList() {
+    if (fuImported) return fuImported;
+    if (!analysis) return [];
+    const onlySilent = $('fuOnlySilent').checked;
+    const out = [];
+    for (const row of analysis) {
+      if (row.thread.participants.length !== 2) continue;   // 1:1 threads only — can't deep-link a group
+      if (onlySilent && row.responded) continue;
+      out.push({
+        username: deriveUsername(row.thread.path) || '',
+        full_name: row.thread.title,
+        fields: {},
+        responded: row.responded
+      });
+    }
+    return out;
+  }
+
+  function personalize(tmpl, p) {
+    const map = {
+      ...p.fields,
+      username: p.username,
+      full_name: p.full_name,
+      name: (p.fields.first_name || p.full_name || p.username).split(/\s+/)[0]
+    };
+    return tmpl.replace(/\{([\w.]+)\}/g, (_, k) => map[k.toLowerCase()] ?? '{' + k + '}');
+  }
+
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); return true; }
+    catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove(); return ok;
+    }
+  }
+
+  function renderFollowup() {
+    const tmpl = $('fuTemplate').value;
+    const list = followupList();
+    const tb = $('fuTable').querySelector('tbody');
+    tb.innerHTML = '';
+    for (const p of list) {
+      const msg = personalize(tmpl, p);
+      const sub = [];
+      if (p.username) sub.push('@' + p.username);
+      if (p.responded === false) sub.push('no response');
+      else if (p.responded === true) sub.push('responded');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><b>${esc(p.full_name || p.username)}</b><div class="muted">${esc(sub.join(' · '))}</div></td>
+        <td><div class="fu-msgtext">${esc(msg)}</div></td>
+        <td class="fu-actions"></td>`;
+      const cell = tr.querySelector('.fu-actions');
+      const bCopy = document.createElement('button');
+      bCopy.textContent = 'Copy';
+      bCopy.addEventListener('click', async () => {
+        bCopy.textContent = (await copyText(msg)) ? 'Copied ✓' : 'Copy failed';
+        setTimeout(() => bCopy.textContent = 'Copy', 1400);
+      });
+      cell.appendChild(bCopy);
+      if (p.username) {
+        const bGo = document.createElement('button');
+        bGo.className = 'primary';
+        bGo.textContent = 'Copy & open DM ↗';
+        bGo.addEventListener('click', async () => {
+          await copyText(msg);
+          window.open('https://ig.me/m/' + encodeURIComponent(p.username), '_blank', 'noopener');
+          tr.classList.add('fu-done');
+          bGo.textContent = 'Opened ✓';
+        });
+        cell.appendChild(bGo);
+      }
+      tb.appendChild(tr);
+    }
+    const empty = $('fuEmpty');
+    empty.style.display = list.length ? 'none' : 'block';
+    empty.textContent = fuImported
+      ? 'No usable rows found in the import.'
+      : (analysis
+        ? 'No one to follow up with — everyone responded 🎉 (uncheck the filter above to include responders)'
+        : 'Scan an export or import a CSV to build your follow-up list.');
   }
 
   // ---------- csv ----------
@@ -548,6 +739,7 @@
     if (!items.length) return;
     safely(async () => {
       if (items.length === 1 && /\.zip$/i.test(items[0].name)) await loadFromZip(items[0]);
+      else if (items.length === 1 && /\.(csv|tsv)$/i.test(items[0].name)) importList(await items[0].text());
       else await loadFromFiles(items);
     });
   });
@@ -568,8 +760,23 @@
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     activeTab = t.dataset.tab;
-    render();
+    if (analysis) render(); else { renderFollowup(); updatePanels(); }
   }));
+
+  $('fuOnlySilent').addEventListener('change', renderFollowup);
+  $('fuTemplate').addEventListener('input', () => { localStorage.setItem('fuTemplate', $('fuTemplate').value); renderFollowup(); });
+  $('btnCsvImport').addEventListener('click', () => $('fileInputCsv').click());
+  $('fileInputCsv').addEventListener('change', e => { const f = e.target.files[0]; if (f) safely(async () => importList(await f.text())); });
+  $('btnPasteCsv').addEventListener('click', () => { const pa = $('pasteArea'); pa.style.display = pa.style.display === 'none' ? 'flex' : 'none'; });
+  $('btnDoPaste').addEventListener('click', () => safely(async () => importList($('pasteCsvText').value)));
+  $('btnClearList').addEventListener('click', () => {
+    fuImported = null;
+    $('btnClearList').style.display = 'none';
+    $('fuScanFilterWrap').style.display = '';
+    renderFollowup();
+  });
+  const savedTmpl = localStorage.getItem('fuTemplate');
+  if (savedTmpl) $('fuTemplate').value = savedTmpl;
 })();
 </script>
 </body>
