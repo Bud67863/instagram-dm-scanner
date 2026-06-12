@@ -207,7 +207,7 @@
         <button id="btnClearList" style="display:none">✕ Clear send list</button>
       </div>
       <div id="pasteArea" style="display:none">
-        <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen"></textarea>
+        <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen&#10;https://www.instagram.com/jakerivera/,Jake Rivera"></textarea>
         <button class="primary" id="btnDoPaste">Import pasted rows</button>
       </div>
       <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. <b>Copy &amp; open DM</b> puts the personalized message on your clipboard and opens the thread: paste (⌘V) and hit send. Each one is logged to the <b>Sent</b> tab (saved in this browser) so you never message the same person twice by accident &mdash; if you opened a DM but didn&rsquo;t send, remove it from Sent with ✕.</p>
@@ -573,17 +573,41 @@
     return rows;
   }
 
+  // Accepts "username", "@username", or a profile link like
+  // https://www.instagram.com/bellaguzman31/ — returns '' if nothing valid.
+  const IG_NON_PROFILE = new Set(['p', 'reel', 'reels', 'tv', 'direct', 'explore', 'accounts', 'm', 'about']);
+  function extractUsername(raw) {
+    let s = String(raw || '').trim();
+    if (!s) return '';
+    const m = s.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/([^\/?#\s]+)(?:\/([^\/?#\s]+))?/i);
+    if (m) {
+      let seg = decodeURIComponent(m[1]).toLowerCase();
+      if (seg === 'stories' && m[2]) seg = decodeURIComponent(m[2]).toLowerCase(); // stories link: /stories/<user>/123
+      else if (IG_NON_PROFILE.has(seg)) return ''; // post/reel/etc links carry no username
+      s = seg;
+    }
+    s = s.replace(/^@/, '').toLowerCase();
+    return /^[a-z0-9._]{1,30}$/.test(s) ? s : '';
+  }
+
   function importList(text) {
     const rows = parseDelimited(text);
     if (rows.length < 2) throw new Error('Need a header row plus at least one person.');
     const headers = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
     const uIdx = headers.findIndex(h => ['username', 'handle', 'ig', 'insta', 'instagram', 'user'].includes(h));
+    const lIdx = headers.findIndex(h => ['link', 'url', 'profile', 'profile_url', 'profile_link', 'instagram_url', 'instagram_link', 'ig_url', 'ig_link'].includes(h));
     const nIdx = headers.findIndex(h => ['name', 'full_name', 'first_name', 'person'].includes(h));
-    if (uIdx === -1 && nIdx === -1) throw new Error('No "username" or "name" column found. Your headers: ' + headers.join(', '));
+    if (uIdx === -1 && lIdx === -1 && nIdx === -1) throw new Error('No "username", "link", or "name" column found. Your headers: ' + headers.join(', '));
     const parsed = rows.slice(1).map(r => {
       const fields = {};
       headers.forEach((h, i) => fields[h] = (r[i] || '').trim());
-      const username = uIdx >= 0 ? fields[headers[uIdx]].replace(/^@/, '').toLowerCase() : '';
+      let username = uIdx >= 0 ? extractUsername(fields[headers[uIdx]]) : '';
+      if (!username && lIdx >= 0) username = extractUsername(fields[headers[lIdx]]);
+      if (!username) { // last resort: a profile link in any column
+        for (const v of Object.values(fields)) {
+          if (/instagram\.com\//i.test(v)) { username = extractUsername(v); if (username) break; }
+        }
+      }
       const full_name = (nIdx >= 0 && fields[headers[nIdx]]) ? fields[headers[nIdx]] : username;
       return { username, full_name, fields };
     }).filter(p => p.username || p.full_name);
