@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Instagram DM Response Scanner</title>
+<title>Instagram DM Sender</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
@@ -172,6 +172,10 @@
   .fu-actionsbar { margin-top: 12px; }
   .fu-actionsbar .chk { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .fu-note { margin-top: 12px; font-size: 12.5px; color: var(--accent2); line-height: 1.5; }
+  .fu-autofill { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .fu-autofill summary { cursor: pointer; color: var(--text); font-weight: 600; font-size: 13px; }
+  .fu-autofill ol { margin: 10px 0 4px 22px; line-height: 1.8; }
+  .fu-autofill a { color: var(--accent2); }
   #pasteArea { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .fu-msgtext { white-space: pre-wrap; }
   .fu-done td { opacity: .45; }
@@ -185,8 +189,8 @@
 </head>
 <body>
 <div class="container">
-  <h1>Instagram DM Response Scanner</h1>
-  <p class="subtitle">Find everyone who responded — text, ❤️ like, emoji reaction, photo, anything — in your DM conversations. 100% local: your data never leaves this browser.</p>
+  <h1>Instagram DM Sender</h1>
+  <p class="subtitle">Send personalized DMs, one click per send — from a CSV, pasted spreadsheet rows, or a scan of who hasn't responded to you. 100% local: your data never leaves this browser.</p>
 
   <div class="dropzone" id="dropzone">
     <h2>Drop your Instagram data export here</h2>
@@ -251,9 +255,9 @@
   </div>
 
   <div class="tabs" id="tabs">
-    <button class="tab active" data-tab="threads">By conversation</button>
+    <button class="tab active" data-tab="followup">✉️ Message send</button>
+    <button class="tab" data-tab="threads">By conversation</button>
     <button class="tab" data-tab="people">By person</button>
-    <button class="tab" data-tab="followup">✉️ Follow up</button>
   </div>
 
   <div class="toolbar" id="toolbar">
@@ -286,7 +290,15 @@
         <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen"></textarea>
         <button class="primary" id="btnDoPaste">Import pasted rows</button>
       </div>
-      <p class="fu-note">Sends stay manual by design: each button copies the personalized message and opens that person&rsquo;s DM &mdash; you paste and hit send. Fully automated senders are Instagram&rsquo;s fastest route to a disabled account.</p>
+      <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. With auto-fill set up (below), <b>Open DM</b> lands in the thread with your message already typed. Without it, the message is on your clipboard &mdash; paste and send.</p>
+      <details class="fu-autofill">
+        <summary>⚡ Set up auto-fill — skip the paste (one-time, ~1 minute)</summary>
+        <ol>
+          <li>Install the <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a> browser extension</li>
+          <li>Then <a href="instagram-dm-autofill.user.js" target="_blank" rel="noopener">click here to install the auto-fill script</a> &mdash; Tampermonkey shows an install screen, hit Install</li>
+          <li>That&rsquo;s it. <b>Open DM ↗</b> now opens the thread with your message already typed in the box &mdash; you just press Send. The script only types; it can&rsquo;t send.</li>
+        </ol>
+      </details>
     </div>
     <input type="file" id="fileInputCsv" accept=".csv,.tsv,.txt" style="display:none">
     <table id="fuTable">
@@ -302,7 +314,7 @@
   // ---------- state ----------
   let threads = [];        // [{ path, title, participants:[names], messages:[...] }]
   let analysis = null;     // result of analyze()
-  let activeTab = 'threads';
+  let activeTab = 'followup';
   let fuImported = null;   // follow-up list from CSV import, or null to derive from scan
 
   const $ = id => document.getElementById(id);
@@ -675,10 +687,11 @@
       if (p.username) {
         const bGo = document.createElement('button');
         bGo.className = 'primary';
-        bGo.textContent = 'Copy & open DM ↗';
+        bGo.textContent = 'Open DM ↗';
         bGo.addEventListener('click', async () => {
-          await copyText(msg);
-          window.open('https://ig.me/m/' + encodeURIComponent(p.username), '_blank', 'noopener');
+          await copyText(msg); // clipboard fallback if auto-fill isn't installed
+          const b64 = btoa(unescape(encodeURIComponent(msg)));
+          window.open('https://ig.me/m/' + encodeURIComponent(p.username) + '#igprefill=' + encodeURIComponent(b64), '_blank', 'noopener');
           tr.classList.add('fu-done');
           bGo.textContent = 'Opened ✓';
         });
@@ -691,8 +704,8 @@
     empty.textContent = fuImported
       ? 'No usable rows found in the import.'
       : (analysis
-        ? 'No one to follow up with — everyone responded 🎉 (uncheck the filter above to include responders)'
-        : 'Scan an export or import a CSV to build your follow-up list.');
+        ? 'No one to message — everyone responded 🎉 (uncheck the filter above to include responders)'
+        : 'Scan an export or import a CSV to build your send list.');
   }
 
   // ---------- csv ----------
