@@ -199,7 +199,7 @@
   <h2 class="section-title">✉️ Message send</h2>
   <div class="fu-panel" id="followupPanel">
     <div class="fu-config">
-      <label class="fu-label">Message template &mdash; placeholders: <code>{name}</code> (first name), <code>{full_name}</code>, <code>{username}</code>, or any column from your CSV like <code>{city}</code></label>
+      <label class="fu-label">Message template &mdash; placeholders: <code>{name}</code> (first name, auto-detected from the handle when you don&rsquo;t have one), <code>{full_name}</code>, <code>{username}</code>, or any column from your CSV like <code>{city}</code></label>
       <textarea id="fuTemplate" rows="3">Hey {name}! Just bumping this back to the top of your inbox 🙂</textarea>
       <div class="fu-row fu-actionsbar">
         <button id="btnCsvImport">📄 Import CSV file</button>
@@ -722,12 +722,39 @@
 
   function followupList() { return fuList; }
 
+  // ---------- derive a natural first name from a handle ----------
+  const FIRST_NAMES = new Set(`aaliyah aaron abby abigail adam addison adriana adrian aiden ainsley alaina alan alana alex alexa alexander alexandra alexandria alexia alexis alfred alice alicia alina alison alissa allie allison ally alyssa amanda amara amber amelia amir amy ana anastasia andrea andres andrew angel angela angelina angelo angie anita ann anna annabelle anne annie anthony antonio april ariana arianna ariel arthur ashley ashlyn ashton aubree aubrey audrey aurora austin autumn ava avery ayden bailey barbara beatrice beau becca becky bella ben benjamin bethany beth bianca billy blake bobby bonnie brad bradley brady brandi brandon brandy braxton brayden brenda brendan brennan brett bria brian briana brianna bridget brittany brock brody brooke brooklyn bruce bryan bryce brynn cade caitlin caleb cameron camila camille candace cara carla carlos carmen carol caroline carolyn carrie carson carter casey cassandra cassidy cassie catherine cecilia celeste chad charlie charlotte chase chelsea cheryl chloe chris christian christina christine christopher cindy claire clara clarissa claudia clay clayton cody colby cole colin colleen colton conner connie connor cooper cora corey courtney craig cristina crystal curtis cynthia daisy dakota dale dalton damian damien dan dana daniel daniela danielle danny daphne darius darlene darren dave david dawn dean deanna debbie deborah declan delaney delilah denise dennis derek derrick desiree destiny devin devon diana diane diego dillon dominic dominique donald donna dorothy doug douglas drew duncan dustin dylan eddie eden edgar edith eduardo edward eli eliana elias elijah elise elizabeth ella ellen ellie elliot eloise elsa elsie emerson emery emilia emily emma emmanuel eric erica erik erin ernesto estella esther ethan eugene eva evan eve evelyn ezra faith felicia felipe felix fernanda fernando finn fiona fletcher flora florence frances francesca francis frank franklin fred frederick gabriel gabriela gabriella gabrielle gage gail garrett gary gavin gemma gene genesis george georgia gerald gianna gina giovanni gloria grace gracie graham grant grayson greg gregory greta griffin gwen gwendolyn hadley hailey haley hannah harley harmony harold harper harrison harry harvey hayden hayley hazel heather heidi helen henry holly hope hudson hunter ian iris isaac isabel isabella isabelle isaiah ivan ivy jace jack jackson jacob jacqueline jada jade jaden jake jalen james jamie jane janet janice jared jasmine jason javier jay jayden jazmin jean jeff jefferson jeffrey jenna jennifer jenny jeremiah jeremy jerry jesse jessica jessie jill jillian jimmy joan joanna jocelyn jodi joel johnny jolene jonah jonathan jordan jordyn jorge jose joseph josephine josh joshua josiah joy joyce juan judith judy julia julian juliana julie juliet juliette june justin justine kaden kai kaitlyn kaleb kara karen karina karl karla kassidy kate katelyn katherine kathleen kathryn kathy katie katrina kayla kaylee keaton keegan keira keith kelley kelly kelsey kendall kendra kennedy kenneth kenzie kevin kiara kimberly kira kirsten kristen kristin kristina kristine kurt kyle kylee kylie kyra lacey laila lana lance landon lane larry laura lauren laurie layla leah leila lena leo leon leonard leslie levi lewis lexi liam libby lila lilian liliana lillian lily lincoln linda lindsay lindsey lisa logan lola london lorenzo loretta lori louis louise luca lucas lucia luciana lucy luis luke luna lydia lyla lynn mackenzie macy maddie madeline madison maggie maia makayla malachi malcolm mallory mandy manuel mara marc marcus margaret maria mariah marie marilyn mario marisa marissa marjorie mark marlene marshall martha martin marty marvin mary mason mateo matt matthew maureen maverick max maxine maxwell maya mckenna meg megan meghan melanie melinda melissa melody mercedes meredith mia micah michael michaela michele michelle miguel mikayla miles miller milo mira miranda miriam mitchell molly monica morgan moses mya myles myra nadia nancy naomi natalia natalie natasha nate nathan nathaniel neil nelson nia nicholas nick nicolas nicole nina noah noel noelle nolan nora norah norma oakley olivia ollie omar oscar owen paige pamela paola parker patricia patrick paul paula paulina payton pedro penelope perry peter peyton philip phillip phoebe phyllis pierce piper preston quentin quinn rachel rae raelynn ralph ramon randall randy raphael raul ray raymond reagan rebecca reed reese reggie regina reid remy rene renee reuben rex rhett rhiannon ricardo richard ricky riley rita robert roberto robin rocco rochelle rodney roger roland roman ronald rory rosa rosalie rose rosemary ross rowan ruben ruby russell ruth ryan ryder rylee ryleigh sabrina sadie sage sally salvador sam samantha samir samuel sandra sandy santiago sara sarah sariah sasha savannah sawyer scarlett scott sean sebastian selena serena sergio seth shane shannon shari shaun shawn shayla shelby sheldon sherry sheryl shyla sidney sienna sierra simon simone skye skylar sloane sofia sole solomon sonia sophia sophie spencer stacey stacy stanley stefan stella stephanie stephen sterling steve steven stuart sue summer susan sutton sydney sylvia tabitha talia tamara tammy tanner tanya tara tasha tatiana tatum taylor teresa terrence terry tessa thaddeus thalia theo theodore theresa thomas tia tiffany timothy tina tobias toby todd tommy toni tony tori tracy travis trent trenton trevor trey trinity tristan troy tucker tyler tyra tyrese tyson ulises uma uriah ursula valentina valerie vanessa vaughn vera veronica vicki victor victoria vincent viola violet virginia vivian vivienne wade walker wallace walter wanda warren wayne wendy wesley weston whitney william willie willow wilson winston wyatt xavier xander yadira yara yasmin yolanda yvette yvonne zachary zane zara zoe zoey`.split(/\s+/));
+  const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  function dictName(tok) {                    // longest known first-name prefix of a token
+    for (let i = tok.length; i >= 3; i--) {
+      if (FIRST_NAMES.has(tok.slice(0, i))) return cap(tok.slice(0, i));
+    }
+    return '';
+  }
+  function nameFromUsername(u) {
+    if (!u) return '';
+    const tokens = String(u).toLowerCase().split(/[^a-z]+/).filter(Boolean);
+    for (const tok of tokens) {               // 1) earliest token starting with a known name
+      const n = dictName(tok);
+      if (n) return n;
+    }
+    if (tokens[0] && tokens[0].length === 1) return '';  // 2) leads with a lone initial → likely initial+surname, don't guess
+    const first = tokens.find(t => t.length >= 3);        // 3) otherwise the first real chunk as-is
+    return first ? cap(first) : '';
+  }
+  function displayFirstName(p) {
+    const fn = ((p.fields && p.fields.first_name) || '').trim();
+    if (fn) return cap(fn.split(/\s+/)[0]);
+    if (p.full_name && p.full_name !== p.username) return cap(p.full_name.split(/\s+/)[0]);
+    return nameFromUsername(p.username) || 'there';        // never echo the raw handle
+  }
+
   function personalize(tmpl, p) {
     const map = {
       ...p.fields,
       username: p.username,
       full_name: p.full_name,
-      name: (p.fields.first_name || p.full_name || p.username).split(/\s+/)[0]
+      name: displayFirstName(p)
     };
     return tmpl.replace(/\{([\w.]+)\}/g, (_, k) => map[k.toLowerCase()] ?? '{' + k + '}');
   }
