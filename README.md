@@ -41,7 +41,8 @@ Click **Try sample data** to see it working without a real export.
 The **✉️ Message send** tab turns a list into ready-to-send DMs:
 
 - Write one message template with placeholders: `{name}` (first name), `{full_name}`, `{username}`, or any column from your CSV (e.g. `{topic}`)
-- Build the list by **importing a CSV** / **pasting rows straight from Excel or Google Sheets** (see [sample-list.csv](sample-list.csv) — needs a `username` or `name` header), or scan your export and it defaults to people who haven't responded
+- Build the list explicitly — it never fills itself. **Import a CSV** / **paste rows straight from Excel or Google Sheets** (see [sample-list.csv](sample-list.csv) — needs a `username` or `name` header), or scan your export and use the **Add to send list** button on either scan tab. All sources merge and dedupe; the list is saved in your browser across visits
+- The scan results show as two tabs — **❌ Haven't responded** and **✅ Have responded** — each with an add-to-send-list button (1:1 conversations only; group chats are shown but can't be deep-linked)
 - Each row gets a **Copy & open DM** button: it copies the personalized message to your clipboard and opens that person's thread (`ig.me/m/<username>`) — paste and hit send
 - Every send is logged to a **Sent** tab (stored locally in your browser) with the message and timestamp. Sent people are excluded from the To send list — even across reloads and re-imports — so you can't message someone twice by accident. Repeats are deliberate via **Send again**; ✕ removes a record if you opened a DM without sending
 

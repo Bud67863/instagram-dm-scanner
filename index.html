@@ -204,8 +204,7 @@
       <div class="fu-row fu-actionsbar">
         <button id="btnCsvImport">📄 Import CSV file</button>
         <button id="btnPasteCsv">📋 Paste from spreadsheet</button>
-        <label class="chk" id="fuScanFilterWrap" style="display:none"><input type="checkbox" id="fuOnlySilent" checked> only people who haven't responded</label>
-        <button id="btnClearList" style="display:none">✕ Clear imported list</button>
+        <button id="btnClearList" style="display:none">✕ Clear send list</button>
       </div>
       <div id="pasteArea" style="display:none">
         <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen"></textarea>
@@ -294,23 +293,17 @@
   </div>
 
   <div class="tabs" id="tabs">
-    <button class="tab active" data-tab="threads">By conversation</button>
-    <button class="tab" data-tab="people">By person</button>
+    <button class="tab active" data-tab="silent">❌ Haven't responded</button>
+    <button class="tab" data-tab="responded">✅ Have responded</button>
   </div>
 
   <div class="toolbar" id="toolbar">
     <input type="search" id="search" placeholder="Search names…">
-    <label class="chk"><input type="checkbox" id="onlyResponded"> responded only</label>
-    <label class="chk"><input type="checkbox" id="onlySilent"> no response only</label>
+    <button id="btnAddToSend">➕ Add these people to my send list</button>
   </div>
 
   <table id="threadTable">
     <thead><tr><th>Conversation</th><th>Responded?</th><th>Who &amp; how</th><th>Last activity</th></tr></thead>
-    <tbody></tbody>
-  </table>
-
-  <table id="peopleTable">
-    <thead><tr><th>Person</th><th>Response types</th><th>Conversations</th><th>Last response</th></tr></thead>
     <tbody></tbody>
   </table>
 </div>
@@ -320,10 +313,11 @@
   // ---------- state ----------
   let threads = [];        // [{ path, title, participants:[names], messages:[...] }]
   let analysis = null;     // result of analyze()
-  let activeTab = 'threads';
-  let fuImported = null;   // follow-up list from CSV import, or null to derive from scan
-  let fuView = 'tosend';   // 'tosend' | 'sent'
-  let sentLog = [];        // persisted history: [{key, username, full_name, message, ts}]
+  let activeTab = 'silent'; // scan view: 'silent' | 'responded'
+  let fuList = [];          // persisted send list, built explicitly (CSV, paste, or add-from-scan)
+  let fuView = 'tosend';    // 'tosend' | 'sent'
+  let sentLog = [];         // persisted history: [{key, username, full_name, message, ts}]
+  try { fuList = JSON.parse(localStorage.getItem('sendList') || '[]'); } catch (e) { fuList = []; }
   try { sentLog = JSON.parse(localStorage.getItem('sentLog') || '[]'); } catch (e) { sentLog = []; }
 
   const $ = id => document.getElementById(id);
@@ -494,8 +488,6 @@
 
   function render() {
     if (!analysis) return;
-    const onlyR = $('onlyResponded').checked;
-    const onlyS = $('onlySilent').checked;
 
     // stats
     const people = new Set();
@@ -508,12 +500,12 @@
     $('stResponded').textContent = people.size;
     $('stSilent').textContent = silent;
 
-    // threads table
+    // conversation table, filtered to the active tab
+    const wantResponded = activeTab === 'responded';
     const tb = $('threadTable').querySelector('tbody');
     tb.innerHTML = '';
     for (const row of analysis) {
-      if (onlyR && !row.responded) continue;
-      if (onlyS && row.responded) continue;
+      if (row.responded !== wantResponded) continue;
       const names = [row.thread.title, ...row.responders.keys(), ...row.thread.participants];
       if (!passesFilter(names)) continue;
       const who = row.responded
@@ -529,39 +521,16 @@
         <td class="muted">${fmtDate(row.lastTs)}</td>`;
       tb.appendChild(tr);
     }
-
-    // people table
-    const agg = new Map(); // name -> {types:Set, threads:[], lastTs}
-    for (const row of analysis) {
-      for (const [name, r] of row.responders) {
-        if (!agg.has(name)) agg.set(name, { types: new Set(), threads: [], lastTs: 0 });
-        const a = agg.get(name);
-        for (const ty of r.types) a.types.add(ty);
-        a.threads.push(row.thread.title);
-        a.lastTs = Math.max(a.lastTs, r.lastTs);
-      }
-    }
-    const pb = $('peopleTable').querySelector('tbody');
-    pb.innerHTML = '';
-    for (const [name, a] of [...agg.entries()].sort((x, y) => y[1].lastTs - x[1].lastTs)) {
-      if (onlyS) continue;
-      if (!passesFilter([name, ...a.threads])) continue;
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><b>${esc(name)}</b></td>
-        <td>${[...a.types].map(badge).join('')}</td>
-        <td class="muted">${a.threads.map(esc).join(', ')}</td>
-        <td class="muted">${fmtDate(a.lastTs)}</td>`;
-      pb.appendChild(tr);
-    }
+    $('btnAddToSend').textContent = wantResponded
+      ? '➕ Add responders to my send list'
+      : '➕ Add non-responders to my send list';
 
     renderFollowup();
     updatePanels();
   }
 
   function updatePanels() {
-    $('threadTable').classList.toggle('visible', activeTab === 'threads' && !!analysis);
-    $('peopleTable').classList.toggle('visible', activeTab === 'people' && !!analysis);
+    $('threadTable').classList.toggle('visible', !!analysis);
   }
 
   function esc(s) {
@@ -571,7 +540,6 @@
   function run() {
     analysis = analyze();
     ['controls', 'stats', 'tabs', 'toolbar'].forEach(id => $(id).classList.add('visible'));
-    if (!fuImported) $('fuScanFilterWrap').style.display = '';
     render();
   }
 
@@ -612,36 +580,36 @@
     const uIdx = headers.findIndex(h => ['username', 'handle', 'ig', 'insta', 'instagram', 'user'].includes(h));
     const nIdx = headers.findIndex(h => ['name', 'full_name', 'first_name', 'person'].includes(h));
     if (uIdx === -1 && nIdx === -1) throw new Error('No "username" or "name" column found. Your headers: ' + headers.join(', '));
-    fuImported = rows.slice(1).map(r => {
+    const parsed = rows.slice(1).map(r => {
       const fields = {};
       headers.forEach((h, i) => fields[h] = (r[i] || '').trim());
       const username = uIdx >= 0 ? fields[headers[uIdx]].replace(/^@/, '').toLowerCase() : '';
       const full_name = (nIdx >= 0 && fields[headers[nIdx]]) ? fields[headers[nIdx]] : username;
       return { username, full_name, fields };
     }).filter(p => p.username || p.full_name);
-    $('btnClearList').style.display = '';
-    $('fuScanFilterWrap').style.display = 'none';
+    addToSendList(parsed);
     $('pasteArea').style.display = 'none';
-    renderFollowup();
   }
 
-  function followupList() {
-    if (fuImported) return fuImported;
-    if (!analysis) return [];
-    const onlySilent = $('fuOnlySilent').checked;
-    const out = [];
-    for (const row of analysis) {
-      if (row.thread.participants.length !== 2) continue;   // 1:1 threads only — can't deep-link a group
-      if (onlySilent && row.responded) continue;
-      out.push({
-        username: deriveUsername(row.thread.path) || '',
-        full_name: row.thread.title,
-        fields: {},
-        responded: row.responded
-      });
+  // merge people into the send list, deduped by username/name
+  function addToSendList(people) {
+    const existing = new Set(fuList.map(personKey));
+    let added = 0;
+    for (const p of people) {
+      const k = personKey(p);
+      if (existing.has(k)) continue;
+      existing.add(k);
+      fuList.push(p);
+      added++;
     }
-    return out;
+    saveList();
+    renderFollowup();
+    return added;
   }
+
+  function saveList() { localStorage.setItem('sendList', JSON.stringify(fuList)); }
+
+  function followupList() { return fuList; }
 
   function personalize(tmpl, p) {
     const map = {
@@ -688,6 +656,7 @@
     const toSend = list.filter(p => !sentKeys.has(personKey(p)));
     $('cntToSend').textContent = toSend.length;
     $('cntSent').textContent = sentLog.length;
+    $('btnClearList').style.display = fuList.length ? '' : 'none';
 
     // --- To send view ---
     const tb = $('fuTable').querySelector('tbody');
@@ -772,11 +741,7 @@
       empty.style.display = toSend.length ? 'none' : 'block';
       empty.textContent = (list.length && !toSend.length)
         ? 'Everyone on this list has already been messaged ✓ — see the Sent tab.'
-        : fuImported
-          ? 'No usable rows found in the import.'
-          : (analysis
-            ? 'No one to message — everyone responded 🎉 (uncheck the filter above to include responders)'
-            : 'Your send list is empty — import a CSV, paste rows from a spreadsheet, or scan your Instagram export below.');
+        : 'Your send list is empty — import a CSV, paste rows from a spreadsheet, or scan your Instagram export below and add people from there.';
     }
   }
 
@@ -839,8 +804,27 @@
   $('fileInputDir').addEventListener('change', e => { if (e.target.files.length) safely(() => loadFromFiles([...e.target.files])); });
 
   ['ownerSelect', 'windowN', 'wholeThread'].forEach(id => $(id).addEventListener('change', run));
-  ['search', 'onlyResponded', 'onlySilent'].forEach(id => $(id).addEventListener('input', render));
+  $('search').addEventListener('input', render);
   $('btnCsv').addEventListener('click', exportCsv);
+  $('btnAddToSend').addEventListener('click', () => {
+    if (!analysis) return;
+    const want = activeTab === 'responded';
+    const people = [];
+    for (const row of analysis) {
+      if (row.thread.participants.length !== 2) continue; // groups can't be deep-linked to one person
+      if (row.responded !== want) continue;
+      people.push({
+        username: deriveUsername(row.thread.path) || '',
+        full_name: row.thread.title,
+        fields: {},
+        responded: row.responded
+      });
+    }
+    const added = addToSendList(people);
+    const btn = $('btnAddToSend');
+    btn.textContent = added ? `Added ${added} ✓ — see Message send above` : 'Already all on your send list ✓';
+    setTimeout(render, 2000);
+  });
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
@@ -848,16 +832,14 @@
     render();
   }));
 
-  $('fuOnlySilent').addEventListener('change', renderFollowup);
   $('fuTemplate').addEventListener('input', () => { localStorage.setItem('fuTemplate', $('fuTemplate').value); renderFollowup(); });
   $('btnCsvImport').addEventListener('click', () => $('fileInputCsv').click());
   $('fileInputCsv').addEventListener('change', e => { const f = e.target.files[0]; if (f) safely(async () => importList(await f.text())); });
   $('btnPasteCsv').addEventListener('click', () => { const pa = $('pasteArea'); pa.style.display = pa.style.display === 'none' ? 'flex' : 'none'; });
   $('btnDoPaste').addEventListener('click', () => safely(async () => importList($('pasteCsvText').value)));
   $('btnClearList').addEventListener('click', () => {
-    fuImported = null;
-    $('btnClearList').style.display = 'none';
-    $('fuScanFilterWrap').style.display = analysis ? '' : 'none';
+    fuList = [];
+    saveList();
     renderFollowup();
   });
   document.querySelectorAll('.fu-subtab').forEach(b => b.addEventListener('click', () => {
