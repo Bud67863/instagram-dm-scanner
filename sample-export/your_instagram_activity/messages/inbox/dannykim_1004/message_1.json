@@ -1,0 +1,15 @@
+{
+  "participants": [{ "name": "Danny Kim" }, { "name": "Alex Morgan" }],
+  "title": "Danny Kim",
+  "thread_path": "inbox/dannykim_1004",
+  "messages": [
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1781120000000, "content": "Following up one more time on the apartment thing" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780850000000, "content": "Hey did you see my last message?" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780600000000, "content": "No rush, just checking in" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780400000000, "content": "Are you still subletting your place this summer?" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780200000000, "content": "Also are you going to Sam's thing next month?" },
+    { "sender_name": "Danny Kim", "timestamp_ms": 1778000000000, "content": "Hey man! Good to hear from you" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1777900000000, "content": "Danny! Long time" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1777800000000, "content": "Hope you're well" }
+  ]
+}

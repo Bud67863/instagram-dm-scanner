@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instagram DM Response Scanner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1014;
+    --panel: #1a1c23;
+    --panel2: #22242e;
+    --border: #2e3140;
+    --text: #e8e9ed;
+    --muted: #9a9eb0;
+    --accent: #e1306c;
+    --accent2: #f77737;
+    --green: #3ddc84;
+    --red: #ff5c5c;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    padding: 32px 20px 80px;
+  }
+  .container { max-width: 1000px; margin: 0 auto; }
+  h1 {
+    font-size: 26px; font-weight: 700; margin-bottom: 6px;
+    background: linear-gradient(90deg, #f77737, #e1306c, #c13584);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    background: var(--panel);
+    transition: border-color .15s, background .15s;
+    cursor: pointer;
+  }
+  .dropzone.dragover { border-color: var(--accent); background: #241a22; }
+  .dropzone h2 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .dropzone p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .dropzone .buttons { margin-top: 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+  button, .btn {
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.1); }
+
+  .help {
+    margin-top: 16px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 20px; font-size: 13px; color: var(--muted);
+  }
+  .help summary { cursor: pointer; color: var(--text); font-weight: 600; font-size: 13px; }
+  .help ol { margin: 12px 0 4px 20px; line-height: 1.9; }
+  .help b { color: var(--text); }
+
+  .controls {
+    display: none; margin-top: 24px; gap: 16px; flex-wrap: wrap; align-items: flex-end;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px;
+  }
+  .controls.visible { display: flex; }
+  .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .field select, .field input[type=number] {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 14px; min-width: 120px;
+  }
+  .field input[type=number] { width: 90px; }
+
+  .stats { display: none; margin-top: 20px; gap: 12px; flex-wrap: wrap; }
+  .stats.visible { display: flex; }
+  .stat {
+    flex: 1; min-width: 150px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px;
+  }
+  .stat .num { font-size: 26px; font-weight: 700; }
+  .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat.good .num { color: var(--green); }
+  .stat.bad .num { color: var(--red); }
+
+  .tabs { display: none; margin-top: 24px; gap: 4px; }
+  .tabs.visible { display: flex; }
+  .tab {
+    padding: 8px 16px; font-size: 13px; font-weight: 600; color: var(--muted);
+    background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; cursor: pointer;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab:hover { border-color: transparent; border-bottom-color: var(--accent); }
+
+  .toolbar { display: none; margin-top: 14px; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .toolbar.visible { display: flex; }
+  .toolbar input[type=search] {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; flex: 1; min-width: 180px;
+  }
+  .toolbar label.chk { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; display: none; }
+  table.visible { display: table; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; margin: 2px 4px 2px 0; white-space: nowrap;
+  }
+  .badge.text     { background: rgba(61,220,132,.12); color: var(--green); }
+  .badge.reaction { background: rgba(225,48,108,.14); color: #ff7aa8; }
+  .badge.emoji    { background: rgba(247,119,55,.14); color: var(--accent2); }
+  .badge.media    { background: rgba(88,166,255,.14); color: #58a6ff; }
+  .badge.sticker  { background: rgba(186,135,255,.14); color: #ba87ff; }
+  .badge.none     { background: rgba(255,92,92,.12); color: var(--red); }
+  .status-yes { color: var(--green); font-weight: 700; }
+  .status-no  { color: var(--red);   font-weight: 700; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .thread-title { font-weight: 600; }
+  .getdata {
+    background: none; border: none; color: var(--accent2); font-size: 13px; font-weight: 600;
+    text-decoration: underline; text-underline-offset: 3px; padding: 4px;
+  }
+  .getdata:hover { border: none; color: var(--accent); }
+
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65);
+    z-index: 100; align-items: flex-start; justify-content: center; padding: 6vh 20px 40px; overflow-y: auto;
+  }
+  .modal-backdrop.visible { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    max-width: 560px; width: 100%; padding: 24px 28px 28px;
+  }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .modal-head h2 { font-size: 18px; }
+  .modal-close { background: none; border: none; color: var(--muted); font-size: 26px; line-height: 1; padding: 0 4px; }
+  .modal-close:hover { border: none; color: var(--text); }
+  .biglink { display: block; text-align: center; text-decoration: none; padding: 13px; font-size: 15px; background: var(--accent); border-color: var(--accent); color: #fff; border-radius: 8px; }
+  .biglink:hover { filter: brightness(1.1); }
+  .modal-note { color: var(--muted); font-size: 12.5px; line-height: 1.6; margin: 12px 0 6px; }
+  .steps { margin: 14px 0 0 22px; font-size: 14px; line-height: 1.6; }
+  .steps li { margin-bottom: 10px; }
+  .steps .why { color: var(--muted); font-size: 12.5px; }
+  .steps .why.critical { color: var(--accent2); font-weight: 600; }
+
+  .err { display:none; margin-top: 16px; background: rgba(255,92,92,.1); border: 1px solid rgba(255,92,92,.4); color: #ffb4b4; padding: 12px 16px; border-radius: var(--radius); font-size: 13px; }
+  .err.visible { display: block; }
+  #fileInputZip, #fileInputDir { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Instagram DM Response Scanner</h1>
+  <p class="subtitle">Find everyone who responded — text, ❤️ like, emoji reaction, photo, anything — in your DM conversations. 100% local: your data never leaves this browser.</p>
+
+  <div class="dropzone" id="dropzone">
+    <h2>Drop your Instagram data export here</h2>
+    <p>Accepts the export <b>.zip</b> straight from Instagram, or the unzipped folder.<br>Looks for <code>messages/inbox/&hellip;/message_*.json</code> inside.</p>
+    <div class="buttons">
+      <button class="primary" id="btnZip">Choose .zip file</button>
+      <button id="btnDir">Choose unzipped folder</button>
+      <button id="btnSample">Try sample data</button>
+    </div>
+    <p style="margin-top:18px"><button class="getdata" id="btnGetData">📥 Don't have your data yet? Get it from Instagram &rarr;</button></p>
+  </div>
+  <input type="file" id="fileInputZip" accept=".zip">
+  <input type="file" id="fileInputDir" webkitdirectory multiple>
+
+  <div class="modal-backdrop" id="exportModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>Get your data from Instagram</h2>
+        <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+      </div>
+      <a class="btn primary biglink" id="dyiLink" href="https://accountscenter.instagram.com/info_and_permissions/dyi/" target="_blank" rel="noopener">Open Instagram&rsquo;s download page &nearr;</a>
+      <p class="modal-note">Log in if asked. If that link doesn&rsquo;t open the right page: instagram.com &rarr; <b>Settings</b> &rarr; <b>Accounts Center</b> &rarr; <b>Your information and permissions</b> &rarr; <b>Download your information</b>.</p>
+      <ol class="steps">
+        <li>Choose <b>Download or transfer information</b></li>
+        <li>Select your <b>Instagram</b> account (if asked)</li>
+        <li>Pick <b>Some of your information</b> &rarr; check <b>Messages</b> only &rarr; Next <span class="why">(messages-only exports are ready much faster)</span></li>
+        <li>Choose <b>Download to device</b></li>
+        <li>Set <b>Date range</b> &mdash; <i>Last year</i> is plenty for this scan &mdash; and set <b>Format</b> to <b>JSON</b> <span class="why critical">&larr; required, the HTML format won&rsquo;t work here</span></li>
+        <li>Hit <b>Create files</b>, then watch for Instagram&rsquo;s email <span class="why">(usually minutes for messages-only)</span></li>
+        <li>Download the <b>.zip</b> from the email and drop it on this page &mdash; no need to unzip</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="err" id="errBox"></div>
+
+  <div class="controls" id="controls">
+    <div class="field">
+      <label>You are (auto-detected)</label>
+      <select id="ownerSelect"></select>
+    </div>
+    <div class="field">
+      <label>Look at the last &hellip; messages per thread</label>
+      <input type="number" id="windowN" value="5" min="1" max="10000">
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <label class="chk" style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;text-transform:none;letter-spacing:0;cursor:pointer;">
+        <input type="checkbox" id="wholeThread"> scan entire thread instead
+      </label>
+    </div>
+    <div class="field" style="margin-left:auto">
+      <label>&nbsp;</label>
+      <button id="btnCsv">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats">
+    <div class="stat"><div class="num" id="stThreads">0</div><div class="lbl">conversations scanned</div></div>
+    <div class="stat good"><div class="num" id="stResponded">0</div><div class="lbl">people responded</div></div>
+    <div class="stat bad"><div class="num" id="stSilent">0</div><div class="lbl">conversations with no response</div></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="threads">By conversation</button>
+    <button class="tab" data-tab="people">By person</button>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <input type="search" id="search" placeholder="Search names…">
+    <label class="chk"><input type="checkbox" id="onlyResponded"> responded only</label>
+    <label class="chk"><input type="checkbox" id="onlySilent"> no response only</label>
+  </div>
+
+  <table id="threadTable">
+    <thead><tr><th>Conversation</th><th>Responded?</th><th>Who &amp; how</th><th>Last activity</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <table id="peopleTable">
+    <thead><tr><th>Person</th><th>Response types</th><th>Conversations</th><th>Last response</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+(() => {
+  // ---------- state ----------
+  let threads = [];        // [{ path, title, participants:[names], messages:[...] }]
+  let analysis = null;     // result of analyze()
+  let activeTab = 'threads';
+
+  const $ = id => document.getElementById(id);
+
+  // ---------- encoding fix ----------
+  // Instagram's JSON export encodes UTF-8 bytes as individual \u00XX escapes
+  // (mojibake). Re-interpret each code point <256 as a byte and decode as UTF-8.
+  function fixMojibake(s) {
+    if (typeof s !== 'string' || !s) return s;
+    try {
+      const bytes = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) {
+        const c = s.charCodeAt(i);
+        if (c > 255) return s; // already proper unicode, leave it alone
+        bytes[i] = c;
+      }
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch (e) { return s; }
+  }
+
+  // ---------- loading ----------
+  const THREAD_RE = /(^|\/)messages\/inbox\/([^\/]+)\/message_\d+\.json$/i;
+
+  async function loadFromZip(file) {
+    const zip = await JSZip.loadAsync(file);
+    const entries = [];
+    zip.forEach((path, entry) => {
+      const m = path.match(THREAD_RE);
+      if (m && !entry.dir) entries.push({ key: m[2], entry });
+    });
+    if (!entries.length) throw new Error('No DM threads found in this zip. Make sure you exported in JSON format (not HTML) and included Messages.');
+    const files = await Promise.all(entries.map(async e => ({ key: e.key, text: await e.entry.async('string') })));
+    buildThreads(files);
+  }
+
+  async function loadFromFiles(fileList) {
+    const files = [];
+    for (const f of fileList) {
+      const path = f.webkitRelativePath || f.name;
+      const m = path.match(THREAD_RE);
+      if (m) files.push({ key: m[2], text: await f.text() });
+    }
+    if (!files.length) throw new Error('No DM threads found in that folder. Expected messages/inbox/…/message_*.json — make sure you picked the unzipped export root and used JSON format.');
+    buildThreads(files);
+  }
+
+  async function loadSample() {
+    const manifest = await (await fetch('sample-export/manifest.json', { cache: 'no-store' })).json();
+    const files = await Promise.all(manifest.files.map(async p => {
+      const m = p.match(THREAD_RE);
+      return { key: m ? m[2] : p, text: await (await fetch('sample-export/' + p, { cache: 'no-store' })).text() };
+    }));
+    buildThreads(files);
+  }
+
+  function buildThreads(files) {
+    const byKey = new Map();
+    for (const f of files) {
+      let data;
+      try { data = JSON.parse(f.text); } catch (e) { continue; }
+      if (!data.messages) continue;
+      if (!byKey.has(f.key)) {
+        byKey.set(f.key, {
+          path: f.key,
+          title: fixMojibake(data.title || f.key),
+          participants: (data.participants || []).map(p => fixMojibake(p.name)),
+          messages: []
+        });
+      }
+      const t = byKey.get(f.key);
+      for (const m of data.messages) {
+        t.messages.push({
+          sender: fixMojibake(m.sender_name),
+          ts: m.timestamp_ms || 0,
+          content: fixMojibake(m.content || ''),
+          reactions: (m.reactions || []).map(r => ({ actor: fixMojibake(r.actor), reaction: fixMojibake(r.reaction) })),
+          hasMedia: !!(m.photos || m.videos || m.audio_files || m.gifs),
+          hasShare: !!m.share,
+          hasSticker: !!m.sticker,
+          unsent: !!m.is_unsent
+        });
+      }
+    }
+    threads = [...byKey.values()];
+    for (const t of threads) t.messages.sort((a, b) => b.ts - a.ts); // newest first
+    threads.sort((a, b) => (b.messages[0]?.ts || 0) - (a.messages[0]?.ts || 0));
+    detectOwner();
+    run();
+  }
+
+  // ---------- owner detection ----------
+  function detectOwner() {
+    const counts = new Map();
+    for (const t of threads) for (const p of t.participants) counts.set(p, (counts.get(p) || 0) + 1);
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const sel = $('ownerSelect');
+    sel.innerHTML = '';
+    for (const [name, n] of sorted.slice(0, 30)) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = `${name} (in ${n} of ${threads.length} threads)`;
+      sel.appendChild(opt);
+    }
+  }
+
+  // ---------- analysis ----------
+  const EMOJI_ONLY = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}‍️︎\s\u{1f3fb}-\u{1f3ff}!?.]+$/u;
+  const REACTED_RE = /^Reacted .+ to your message\s*$/;
+
+  function classify(m) {
+    if (m.unsent) return null;
+    if (m.content && REACTED_RE.test(m.content)) return 'reaction';
+    if (m.content && EMOJI_ONLY.test(m.content) && /\p{Extended_Pictographic}/u.test(m.content)) return 'emoji';
+    if (m.content) return 'text';
+    if (m.hasSticker) return 'sticker';
+    if (m.hasMedia || m.hasShare) return 'media';
+    return null;
+  }
+
+  function analyze() {
+    const owner = $('ownerSelect').value;
+    const whole = $('wholeThread').checked;
+    const n = Math.max(1, parseInt($('windowN').value) || 5);
+    const rows = [];
+
+    for (const t of threads) {
+      const win = whole ? t.messages : t.messages.slice(0, n);
+      const responders = new Map(); // name -> {types:Set, lastTs}
+      const note = (name, type, ts) => {
+        if (!name || name === owner || !type) return;
+        if (!responders.has(name)) responders.set(name, { types: new Set(), lastTs: 0 });
+        const r = responders.get(name);
+        r.types.add(type);
+        r.lastTs = Math.max(r.lastTs, ts);
+      };
+      for (const m of win) {
+        note(m.sender, classify(m), m.ts);
+        for (const r of m.reactions) note(r.actor, 'reaction', m.ts);
+      }
+      rows.push({
+        thread: t,
+        owner,
+        responders,
+        lastTs: t.messages[0]?.ts || 0,
+        responded: responders.size > 0
+      });
+    }
+    return rows;
+  }
+
+  // ---------- rendering ----------
+  const TYPE_LABEL = { text: '💬 text', reaction: '❤️ like/reaction', emoji: '😀 emoji', media: '📷 media/share', sticker: '✨ sticker' };
+
+  function fmtDate(ts) {
+    if (!ts) return '—';
+    return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function badge(type) {
+    return `<span class="badge ${type}">${TYPE_LABEL[type] || type}</span>`;
+  }
+
+  function passesFilter(names) {
+    const q = $('search').value.trim().toLowerCase();
+    if (!q) return true;
+    return names.some(n => n.toLowerCase().includes(q));
+  }
+
+  function render() {
+    if (!analysis) return;
+    const onlyR = $('onlyResponded').checked;
+    const onlyS = $('onlySilent').checked;
+
+    // stats
+    const people = new Set();
+    let silent = 0;
+    for (const row of analysis) {
+      if (row.responded) for (const name of row.responders.keys()) people.add(name);
+      else silent++;
+    }
+    $('stThreads').textContent = analysis.length;
+    $('stResponded').textContent = people.size;
+    $('stSilent').textContent = silent;
+
+    // threads table
+    const tb = $('threadTable').querySelector('tbody');
+    tb.innerHTML = '';
+    for (const row of analysis) {
+      if (onlyR && !row.responded) continue;
+      if (onlyS && row.responded) continue;
+      const names = [row.thread.title, ...row.responders.keys(), ...row.thread.participants];
+      if (!passesFilter(names)) continue;
+      const who = row.responded
+        ? [...row.responders.entries()].map(([name, r]) =>
+            `<div><b>${esc(name)}</b> ${[...r.types].map(badge).join('')}</div>`).join('')
+        : '<span class="badge none">no response</span>';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><div class="thread-title">${esc(row.thread.title)}</div>
+            <div class="muted">${row.thread.participants.length} participants · ${row.thread.messages.length} msgs</div></td>
+        <td class="${row.responded ? 'status-yes' : 'status-no'}">${row.responded ? '✓ yes' : '✗ no'}</td>
+        <td>${who}</td>
+        <td class="muted">${fmtDate(row.lastTs)}</td>`;
+      tb.appendChild(tr);
+    }
+
+    // people table
+    const agg = new Map(); // name -> {types:Set, threads:[], lastTs}
+    for (const row of analysis) {
+      for (const [name, r] of row.responders) {
+        if (!agg.has(name)) agg.set(name, { types: new Set(), threads: [], lastTs: 0 });
+        const a = agg.get(name);
+        for (const ty of r.types) a.types.add(ty);
+        a.threads.push(row.thread.title);
+        a.lastTs = Math.max(a.lastTs, r.lastTs);
+      }
+    }
+    const pb = $('peopleTable').querySelector('tbody');
+    pb.innerHTML = '';
+    for (const [name, a] of [...agg.entries()].sort((x, y) => y[1].lastTs - x[1].lastTs)) {
+      if (onlyS) continue;
+      if (!passesFilter([name, ...a.threads])) continue;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><b>${esc(name)}</b></td>
+        <td>${[...a.types].map(badge).join('')}</td>
+        <td class="muted">${a.threads.map(esc).join(', ')}</td>
+        <td class="muted">${fmtDate(a.lastTs)}</td>`;
+      pb.appendChild(tr);
+    }
+
+    // tab visibility
+    $('threadTable').classList.toggle('visible', activeTab === 'threads');
+    $('peopleTable').classList.toggle('visible', activeTab === 'people');
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function run() {
+    analysis = analyze();
+    ['controls', 'stats', 'tabs', 'toolbar'].forEach(id => $(id).classList.add('visible'));
+    render();
+  }
+
+  // ---------- csv ----------
+  function exportCsv() {
+    if (!analysis) return;
+    const lines = [['person', 'responded', 'response_types', 'conversation', 'last_response']];
+    for (const row of analysis) {
+      if (row.responded) {
+        for (const [name, r] of row.responders) {
+          lines.push([name, 'yes', [...r.types].join('+'), row.thread.title, new Date(r.lastTs).toISOString()]);
+        }
+      } else {
+        lines.push([row.thread.title, 'no', '', row.thread.title, row.lastTs ? new Date(row.lastTs).toISOString() : '']);
+      }
+    }
+    const csv = lines.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
+    a.download = 'instagram-dm-responses.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ---------- error handling ----------
+  function showError(msg) {
+    const e = $('errBox');
+    e.textContent = msg;
+    e.classList.add('visible');
+  }
+  function clearError() { $('errBox').classList.remove('visible'); }
+
+  async function safely(fn) {
+    clearError();
+    try { await fn(); } catch (e) { showError(e.message || String(e)); }
+  }
+
+  // ---------- events ----------
+  const dz = $('dropzone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    const items = [...e.dataTransfer.files];
+    if (!items.length) return;
+    safely(async () => {
+      if (items.length === 1 && /\.zip$/i.test(items[0].name)) await loadFromZip(items[0]);
+      else await loadFromFiles(items);
+    });
+  });
+  $('btnGetData').addEventListener('click', e => { e.stopPropagation(); $('exportModal').classList.add('visible'); });
+  $('modalClose').addEventListener('click', () => $('exportModal').classList.remove('visible'));
+  $('exportModal').addEventListener('click', e => { if (e.target === $('exportModal')) $('exportModal').classList.remove('visible'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') $('exportModal').classList.remove('visible'); });
+  $('btnZip').addEventListener('click', e => { e.stopPropagation(); $('fileInputZip').click(); });
+  $('btnDir').addEventListener('click', e => { e.stopPropagation(); $('fileInputDir').click(); });
+  $('btnSample').addEventListener('click', e => { e.stopPropagation(); safely(loadSample); });
+  $('fileInputZip').addEventListener('change', e => { if (e.target.files[0]) safely(() => loadFromZip(e.target.files[0])); });
+  $('fileInputDir').addEventListener('change', e => { if (e.target.files.length) safely(() => loadFromFiles([...e.target.files])); });
+
+  ['ownerSelect', 'windowN', 'wholeThread'].forEach(id => $(id).addEventListener('change', run));
+  ['search', 'onlyResponded', 'onlySilent'].forEach(id => $(id).addEventListener('input', render));
+  $('btnCsv').addEventListener('click', exportCsv);
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    activeTab = t.dataset.tab;
+    render();
+  }));
+})();
+</script>
+</body>
+</html>

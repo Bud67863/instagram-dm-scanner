@@ -1,0 +1,11 @@
+{
+  "participants": [{ "name": "Lucy Perez" }, { "name": "Alex Morgan" }],
+  "title": "Lucy Perez",
+  "thread_path": "inbox/lucyperez_1006",
+  "messages": [
+    { "sender_name": "Lucy Perez", "timestamp_ms": 1780990000000, "share": { "link": "https://instagram.com/p/xyz", "share_text": "thought of you" } },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780980000000, "content": "How's the new job going?" },
+    { "sender_name": "Lucy Perez", "timestamp_ms": 1780200000000, "content": "Reacted â¤ï¸ to your message " },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780100000000, "content": "Congrats on the move!" }
+  ]
+}

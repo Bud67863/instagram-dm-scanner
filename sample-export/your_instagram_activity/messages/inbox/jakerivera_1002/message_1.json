@@ -1,0 +1,15 @@
+{
+  "participants": [{ "name": "Jake Rivera" }, { "name": "Alex Morgan" }],
+  "title": "Jake Rivera",
+  "thread_path": "inbox/jakerivera_1002",
+  "messages": [
+    {
+      "sender_name": "Alex Morgan",
+      "timestamp_ms": 1781100000000,
+      "content": "Game starts at 7 if you want to come over",
+      "reactions": [{ "reaction": "â¤ï¸", "actor": "Jake Rivera" }]
+    },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1781000000000, "content": "You around this week?" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780700000000, "content": "Yo" }
+  ]
+}

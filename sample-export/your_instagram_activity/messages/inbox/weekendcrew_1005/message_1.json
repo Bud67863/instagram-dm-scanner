@@ -1,0 +1,22 @@
+{
+  "participants": [
+    { "name": "Maya Chen" },
+    { "name": "Jake Rivera" },
+    { "name": "Priya Sharma" },
+    { "name": "Alex Morgan" }
+  ],
+  "title": "Weekend Crew",
+  "thread_path": "inbox/weekendcrew_1005",
+  "messages": [
+    { "sender_name": "Priya Sharma", "timestamp_ms": 1781190000000, "content": "I'm in, what time?" },
+    {
+      "sender_name": "Alex Morgan",
+      "timestamp_ms": 1781185000000,
+      "content": "Hike on Sunday anyone?",
+      "reactions": [{ "reaction": "ð", "actor": "Maya Chen" }]
+    },
+    { "sender_name": "Jake Rivera", "timestamp_ms": 1780950000000, "photos": [{ "uri": "media/photo1.jpg" }] },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780940000000, "content": "Send the pics from last time" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780600000000, "content": "Great seeing everyone" }
+  ]
+}

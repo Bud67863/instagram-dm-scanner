@@ -1,0 +1,10 @@
+{
+  "participants": [{ "name": "RenÃ©e Dupont" }, { "name": "Alex Morgan" }],
+  "title": "RenÃ©e Dupont",
+  "thread_path": "inbox/reneedupont_1003",
+  "messages": [
+    { "sender_name": "RenÃ©e Dupont", "timestamp_ms": 1781050000000, "content": "ððð" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1781040000000, "content": "I tripped over the cat again this morning" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780300000000, "content": "How was the trip?" }
+  ]
+}

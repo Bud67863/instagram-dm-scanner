@@ -1,0 +1,12 @@
+{
+  "participants": [{ "name": "Maya Chen" }, { "name": "Alex Morgan" }],
+  "title": "Maya Chen",
+  "thread_path": "inbox/mayachen_1001",
+  "messages": [
+    { "sender_name": "Maya Chen", "timestamp_ms": 1781180000000, "content": "Yes! Saturday works, see you then" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1781170000000, "content": "Want to grab coffee this weekend?" },
+    { "sender_name": "Maya Chen", "timestamp_ms": 1780900000000, "content": "Haha that video was amazing" },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780890000000, "content": "Check this out", "share": { "link": "https://instagram.com/reel/abc" } },
+    { "sender_name": "Alex Morgan", "timestamp_ms": 1780500000000, "content": "Hey, long time!" }
+  ]
+}

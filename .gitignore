@@ -1,0 +1,14 @@
+# macOS / local tooling
+.DS_Store
+.claude/
+
+# Real Instagram data exports must NEVER be committed.
+# (the fake demo data in sample-export/ is the only data that belongs in this repo)
+*.zip
+/your_instagram_activity/
+/messages/
+/personal_information/
+/security_and_login_information/
+/connections/
+/instagram-*/
+/meta-*/
