@@ -159,8 +159,10 @@
   .steps .why { color: var(--muted); font-size: 12.5px; }
   .steps .why.critical { color: var(--accent2); font-weight: 600; }
 
-  .fu-panel { display: none; margin-top: 14px; }
-  .fu-panel.visible { display: block; }
+  .section-title { font-size: 16px; font-weight: 700; margin: 30px 0 12px; }
+  .section-title:first-of-type { margin-top: 4px; }
+  .section-optional { font-weight: 400; font-size: 12.5px; color: var(--muted); margin-left: 6px; }
+  .fu-panel { margin-bottom: 6px; }
   .fu-panel #fuTable { display: table; }
   .fu-config { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
   .fu-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
@@ -188,6 +190,32 @@
   <h1>Instagram DM Sender</h1>
   <p class="subtitle">Send personalized DMs, one click per send — from a CSV, pasted spreadsheet rows, or a scan of who hasn't responded to you. 100% local: your data never leaves this browser.</p>
 
+  <h2 class="section-title">✉️ Message send</h2>
+  <div class="fu-panel" id="followupPanel">
+    <div class="fu-config">
+      <label class="fu-label">Message template &mdash; placeholders: <code>{name}</code> (first name), <code>{full_name}</code>, <code>{username}</code>, or any column from your CSV like <code>{city}</code></label>
+      <textarea id="fuTemplate" rows="3">Hey {name}! Just bumping this back to the top of your inbox 🙂</textarea>
+      <div class="fu-row fu-actionsbar">
+        <button id="btnCsvImport">📄 Import CSV file</button>
+        <button id="btnPasteCsv">📋 Paste from spreadsheet</button>
+        <label class="chk" id="fuScanFilterWrap" style="display:none"><input type="checkbox" id="fuOnlySilent" checked> only people who haven't responded</label>
+        <button id="btnClearList" style="display:none">✕ Clear imported list</button>
+      </div>
+      <div id="pasteArea" style="display:none">
+        <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen"></textarea>
+        <button class="primary" id="btnDoPaste">Import pasted rows</button>
+      </div>
+      <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. <b>Copy &amp; open DM</b> puts the personalized message on your clipboard and opens the thread: paste (⌘V) and hit send.</p>
+    </div>
+    <input type="file" id="fileInputCsv" accept=".csv,.tsv,.txt" style="display:none">
+    <table id="fuTable">
+      <thead><tr><th>Person</th><th>Message (ready to send)</th><th style="width:240px"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p id="fuEmpty" class="muted" style="display:none;margin-top:14px"></p>
+  </div>
+
+  <h2 class="section-title">📊 Scan your Instagram DMs <span class="section-optional">optional — fills the send list with people who haven't responded, and shows who responds to you</span></h2>
   <div class="dropzone" id="dropzone">
     <h2>Drop your Instagram data export here</h2>
     <p>Accepts the export <b>.zip</b> straight from Instagram, or the unzipped folder.<br>Looks for <code>messages/inbox/&hellip;/message_*.json</code> inside.</p>
@@ -251,8 +279,7 @@
   </div>
 
   <div class="tabs" id="tabs">
-    <button class="tab active" data-tab="followup">✉️ Message send</button>
-    <button class="tab" data-tab="threads">By conversation</button>
+    <button class="tab active" data-tab="threads">By conversation</button>
     <button class="tab" data-tab="people">By person</button>
   </div>
 
@@ -271,30 +298,6 @@
     <thead><tr><th>Person</th><th>Response types</th><th>Conversations</th><th>Last response</th></tr></thead>
     <tbody></tbody>
   </table>
-
-  <div class="fu-panel" id="followupPanel">
-    <div class="fu-config">
-      <label class="fu-label">Message template &mdash; placeholders: <code>{name}</code> (first name), <code>{full_name}</code>, <code>{username}</code>, or any column from your CSV like <code>{city}</code></label>
-      <textarea id="fuTemplate" rows="3">Hey {name}! Just bumping this back to the top of your inbox 🙂</textarea>
-      <div class="fu-row fu-actionsbar">
-        <button id="btnCsvImport">📄 Import CSV file</button>
-        <button id="btnPasteCsv">📋 Paste from spreadsheet</button>
-        <label class="chk" id="fuScanFilterWrap"><input type="checkbox" id="fuOnlySilent" checked> only people who haven't responded</label>
-        <button id="btnClearList" style="display:none">✕ Clear imported list</button>
-      </div>
-      <div id="pasteArea" style="display:none">
-        <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen"></textarea>
-        <button class="primary" id="btnDoPaste">Import pasted rows</button>
-      </div>
-      <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. <b>Copy &amp; open DM</b> puts the personalized message on your clipboard and opens the thread: paste (⌘V) and hit send.</p>
-    </div>
-    <input type="file" id="fileInputCsv" accept=".csv,.tsv,.txt" style="display:none">
-    <table id="fuTable">
-      <thead><tr><th>Person</th><th>Message (ready to send)</th><th style="width:240px"></th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <p id="fuEmpty" class="muted" style="display:none;margin-top:14px"></p>
-  </div>
 </div>
 
 <script>
@@ -302,7 +305,7 @@
   // ---------- state ----------
   let threads = [];        // [{ path, title, participants:[names], messages:[...] }]
   let analysis = null;     // result of analyze()
-  let activeTab = 'followup';
+  let activeTab = 'threads';
   let fuImported = null;   // follow-up list from CSV import, or null to derive from scan
 
   const $ = id => document.getElementById(id);
@@ -541,8 +544,6 @@
   function updatePanels() {
     $('threadTable').classList.toggle('visible', activeTab === 'threads' && !!analysis);
     $('peopleTable').classList.toggle('visible', activeTab === 'people' && !!analysis);
-    $('followupPanel').classList.toggle('visible', activeTab === 'followup');
-    $('toolbar').style.display = activeTab === 'followup' ? 'none' : '';
   }
 
   function esc(s) {
@@ -552,6 +553,7 @@
   function run() {
     analysis = analyze();
     ['controls', 'stats', 'tabs', 'toolbar'].forEach(id => $(id).classList.add('visible'));
+    if (!fuImported) $('fuScanFilterWrap').style.display = '';
     render();
   }
 
@@ -602,11 +604,7 @@
     $('btnClearList').style.display = '';
     $('fuScanFilterWrap').style.display = 'none';
     $('pasteArea').style.display = 'none';
-    $('tabs').classList.add('visible');
-    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === 'followup'));
-    activeTab = 'followup';
     renderFollowup();
-    updatePanels();
   }
 
   function followupList() {
@@ -692,7 +690,7 @@
       ? 'No usable rows found in the import.'
       : (analysis
         ? 'No one to message — everyone responded 🎉 (uncheck the filter above to include responders)'
-        : 'Scan an export or import a CSV to build your send list.');
+        : 'Your send list is empty — import a CSV, paste rows from a spreadsheet, or scan your Instagram export below.');
   }
 
   // ---------- csv ----------
@@ -760,7 +758,7 @@
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     activeTab = t.dataset.tab;
-    if (analysis) render(); else { renderFollowup(); updatePanels(); }
+    render();
   }));
 
   $('fuOnlySilent').addEventListener('change', renderFollowup);
@@ -772,11 +770,12 @@
   $('btnClearList').addEventListener('click', () => {
     fuImported = null;
     $('btnClearList').style.display = 'none';
-    $('fuScanFilterWrap').style.display = '';
+    $('fuScanFilterWrap').style.display = analysis ? '' : 'none';
     renderFollowup();
   });
   const savedTmpl = localStorage.getItem('fuTemplate');
   if (savedTmpl) $('fuTemplate').value = savedTmpl;
+  renderFollowup();
 })();
 </script>
 </body>
