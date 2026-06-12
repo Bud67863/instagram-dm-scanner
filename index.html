@@ -163,7 +163,13 @@
   .section-title:first-of-type { margin-top: 4px; }
   .section-optional { font-weight: 400; font-size: 12.5px; color: var(--muted); margin-left: 6px; }
   .fu-panel { margin-bottom: 6px; }
-  .fu-panel #fuTable { display: table; }
+  .fu-subtabs { display: flex; gap: 4px; align-items: center; margin-top: 16px; }
+  .fu-subtab {
+    background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0;
+    color: var(--muted); font-size: 13px; font-weight: 600; padding: 8px 14px;
+  }
+  .fu-subtab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .fu-subtab:hover { border-color: transparent; border-bottom-color: var(--accent); }
   .fu-config { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
   .fu-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
   .fu-config textarea {
@@ -205,11 +211,20 @@
         <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen"></textarea>
         <button class="primary" id="btnDoPaste">Import pasted rows</button>
       </div>
-      <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. <b>Copy &amp; open DM</b> puts the personalized message on your clipboard and opens the thread: paste (⌘V) and hit send.</p>
+      <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. <b>Copy &amp; open DM</b> puts the personalized message on your clipboard and opens the thread: paste (⌘V) and hit send. Each one is logged to the <b>Sent</b> tab (saved in this browser) so you never message the same person twice by accident &mdash; if you opened a DM but didn&rsquo;t send, remove it from Sent with ✕.</p>
     </div>
     <input type="file" id="fileInputCsv" accept=".csv,.tsv,.txt" style="display:none">
+    <div class="fu-subtabs">
+      <button class="fu-subtab active" data-view="tosend">📤 To send (<span id="cntToSend">0</span>)</button>
+      <button class="fu-subtab" data-view="sent">✅ Sent (<span id="cntSent">0</span>)</button>
+      <button id="btnClearSent" style="display:none;margin-left:auto">🗑 Clear sent history</button>
+    </div>
     <table id="fuTable">
-      <thead><tr><th>Person</th><th>Message (ready to send)</th><th style="width:240px"></th></tr></thead>
+      <thead><tr><th>Person</th><th>Message (ready to send)</th><th style="width:260px"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <table id="sentTable">
+      <thead><tr><th>Person</th><th>Message sent</th><th>When</th><th style="width:170px"></th></tr></thead>
       <tbody></tbody>
     </table>
     <p id="fuEmpty" class="muted" style="display:none;margin-top:14px"></p>
@@ -307,6 +322,9 @@
   let analysis = null;     // result of analyze()
   let activeTab = 'threads';
   let fuImported = null;   // follow-up list from CSV import, or null to derive from scan
+  let fuView = 'tosend';   // 'tosend' | 'sent'
+  let sentLog = [];        // persisted history: [{key, username, full_name, message, ts}]
+  try { sentLog = JSON.parse(localStorage.getItem('sentLog') || '[]'); } catch (e) { sentLog = []; }
 
   const $ = id => document.getElementById(id);
 
@@ -646,12 +664,35 @@
     }
   }
 
+  function personKey(p) {
+    return p.username ? 'u:' + p.username.toLowerCase() : 'n:' + (p.full_name || '').toLowerCase();
+  }
+  function saveSent() { localStorage.setItem('sentLog', JSON.stringify(sentLog)); }
+  function markSent(p, msg) {
+    const key = personKey(p);
+    sentLog = sentLog.filter(e => e.key !== key);
+    sentLog.unshift({ key, username: p.username || '', full_name: p.full_name || '', message: msg, ts: Date.now() });
+    saveSent();
+    renderFollowup();
+  }
+  function unmarkSent(key) {
+    sentLog = sentLog.filter(e => e.key !== key);
+    saveSent();
+    renderFollowup();
+  }
+
   function renderFollowup() {
     const tmpl = $('fuTemplate').value;
+    const sentKeys = new Set(sentLog.map(e => e.key));
     const list = followupList();
+    const toSend = list.filter(p => !sentKeys.has(personKey(p)));
+    $('cntToSend').textContent = toSend.length;
+    $('cntSent').textContent = sentLog.length;
+
+    // --- To send view ---
     const tb = $('fuTable').querySelector('tbody');
     tb.innerHTML = '';
-    for (const p of list) {
+    for (const p of toSend) {
       const msg = personalize(tmpl, p);
       const sub = [];
       if (p.username) sub.push('@' + p.username);
@@ -677,20 +718,66 @@
         bGo.addEventListener('click', async () => {
           await copyText(msg);
           window.open('https://ig.me/m/' + encodeURIComponent(p.username), '_blank', 'noopener');
-          tr.classList.add('fu-done');
-          bGo.textContent = 'Opened ✓';
+          markSent(p, msg);
         });
         cell.appendChild(bGo);
       }
+      const bMark = document.createElement('button');
+      bMark.textContent = '✓';
+      bMark.title = 'Mark as sent without opening the DM';
+      bMark.addEventListener('click', () => markSent(p, personalize($('fuTemplate').value, p)));
+      cell.appendChild(bMark);
       tb.appendChild(tr);
     }
+
+    // --- Sent view ---
+    const sb = $('sentTable').querySelector('tbody');
+    sb.innerHTML = '';
+    for (const e of sentLog) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><b>${esc(e.full_name || e.username)}</b>${e.username ? `<div class="muted">@${esc(e.username)}</div>` : ''}</td>
+        <td><div class="fu-msgtext">${esc(e.message)}</div></td>
+        <td class="muted" style="white-space:nowrap">${new Date(e.ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</td>
+        <td class="fu-actions"></td>`;
+      const cell = tr.querySelector('.fu-actions');
+      if (e.username) {
+        const bAgain = document.createElement('button');
+        bAgain.textContent = 'Send again ↗';
+        bAgain.title = 'Copy the same message and open the DM again';
+        bAgain.addEventListener('click', async () => {
+          await copyText(e.message);
+          window.open('https://ig.me/m/' + encodeURIComponent(e.username), '_blank', 'noopener');
+          markSent({ username: e.username, full_name: e.full_name }, e.message);
+        });
+        cell.appendChild(bAgain);
+      }
+      const bRm = document.createElement('button');
+      bRm.textContent = '✕';
+      bRm.title = "Remove from sent history — they'll reappear in the To send list";
+      bRm.addEventListener('click', () => unmarkSent(e.key));
+      cell.appendChild(bRm);
+      sb.appendChild(tr);
+    }
+
+    $('fuTable').classList.toggle('visible', fuView === 'tosend');
+    $('sentTable').classList.toggle('visible', fuView === 'sent');
+    $('btnClearSent').style.display = (fuView === 'sent' && sentLog.length) ? '' : 'none';
+
     const empty = $('fuEmpty');
-    empty.style.display = list.length ? 'none' : 'block';
-    empty.textContent = fuImported
-      ? 'No usable rows found in the import.'
-      : (analysis
-        ? 'No one to message — everyone responded 🎉 (uncheck the filter above to include responders)'
-        : 'Your send list is empty — import a CSV, paste rows from a spreadsheet, or scan your Instagram export below.');
+    if (fuView === 'sent') {
+      empty.style.display = sentLog.length ? 'none' : 'block';
+      empty.textContent = 'Nothing sent yet — messages land here when you use “Copy & open DM” or “✓”.';
+    } else {
+      empty.style.display = toSend.length ? 'none' : 'block';
+      empty.textContent = (list.length && !toSend.length)
+        ? 'Everyone on this list has already been messaged ✓ — see the Sent tab.'
+        : fuImported
+          ? 'No usable rows found in the import.'
+          : (analysis
+            ? 'No one to message — everyone responded 🎉 (uncheck the filter above to include responders)'
+            : 'Your send list is empty — import a CSV, paste rows from a spreadsheet, or scan your Instagram export below.');
+    }
   }
 
   // ---------- csv ----------
@@ -772,6 +859,20 @@
     $('btnClearList').style.display = 'none';
     $('fuScanFilterWrap').style.display = analysis ? '' : 'none';
     renderFollowup();
+  });
+  document.querySelectorAll('.fu-subtab').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.fu-subtab').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    fuView = b.dataset.view;
+    renderFollowup();
+  }));
+  $('btnClearSent').addEventListener('click', () => {
+    if (!sentLog.length) return;
+    if (confirm('Clear all ' + sentLog.length + ' sent records? Those people will reappear in your To send list.')) {
+      sentLog = [];
+      saveSent();
+      renderFollowup();
+    }
   });
   const savedTmpl = localStorage.getItem('fuTemplate');
   if (savedTmpl) $('fuTemplate').value = savedTmpl;
