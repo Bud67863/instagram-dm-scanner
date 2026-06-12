@@ -282,6 +282,7 @@
     </div>
     <div class="field" style="margin-left:auto">
       <label>&nbsp;</label>
+      <button id="btnForgetScan" title="Remove the scanned data saved in this browser">✕ Forget scan data</button>
       <button id="btnCsv">Export CSV</button>
     </div>
   </div>
@@ -319,6 +320,34 @@
   let sentLog = [];         // persisted history: [{key, username, full_name, message, ts}]
   try { fuList = JSON.parse(localStorage.getItem('sendList') || '[]'); } catch (e) { fuList = []; }
   try { sentLog = JSON.parse(localStorage.getItem('sentLog') || '[]'); } catch (e) { sentLog = []; }
+
+  // ---------- persistence (IndexedDB for scan data; localStorage for the rest) ----------
+  function idb(mode, fn) {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('dm-sender', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('kv');
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction('kv', mode);
+        const op = fn(tx.objectStore('kv'));
+        tx.oncomplete = () => { db.close(); resolve(op && op.result); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      };
+    });
+  }
+  const idbSave = (k, v) => idb('readwrite', s => s.put(v, k));
+  const idbLoad = k => idb('readonly', s => s.get(k));
+  const idbDelete = k => idb('readwrite', s => s.delete(k));
+
+  function saveUiState() {
+    localStorage.setItem('uiState', JSON.stringify({
+      owner: $('ownerSelect').value,
+      windowN: $('windowN').value,
+      wholeThread: $('wholeThread').checked,
+      activeTab, fuView
+    }));
+  }
 
   const $ = id => document.getElementById(id);
 
@@ -389,21 +418,26 @@
       }
       const t = byKey.get(f.key);
       for (const m of data.messages) {
-        t.messages.push({
-          sender: fixMojibake(m.sender_name),
-          ts: m.timestamp_ms || 0,
+        const raw = {
           content: fixMojibake(m.content || ''),
-          reactions: (m.reactions || []).map(r => ({ actor: fixMojibake(r.actor), reaction: fixMojibake(r.reaction) })),
           hasMedia: !!(m.photos || m.videos || m.audio_files || m.gifs),
           hasShare: !!m.share,
           hasSticker: !!m.sticker,
           unsent: !!m.is_unsent
+        };
+        // keep only what analysis needs — message text is never stored
+        t.messages.push({
+          sender: fixMojibake(m.sender_name),
+          ts: m.timestamp_ms || 0,
+          type: classify(raw),
+          reactions: (m.reactions || []).map(r => fixMojibake(r.actor))
         });
       }
     }
     threads = [...byKey.values()];
     for (const t of threads) t.messages.sort((a, b) => b.ts - a.ts); // newest first
     threads.sort((a, b) => (b.messages[0]?.ts || 0) - (a.messages[0]?.ts || 0));
+    idbSave('threads', threads).catch(() => {});
     detectOwner();
     run();
   }
@@ -454,8 +488,8 @@
         r.lastTs = Math.max(r.lastTs, ts);
       };
       for (const m of win) {
-        note(m.sender, classify(m), m.ts);
-        for (const r of m.reactions) note(r.actor, 'reaction', m.ts);
+        note(m.sender, m.type, m.ts);
+        for (const actor of m.reactions) note(actor, 'reaction', m.ts);
       }
       rows.push({
         thread: t,
@@ -541,6 +575,7 @@
     analysis = analyze();
     ['controls', 'stats', 'tabs', 'toolbar'].forEach(id => $(id).classList.add('visible'));
     render();
+    saveUiState();
   }
 
   // ---------- follow-up ----------
@@ -830,6 +865,15 @@
   ['ownerSelect', 'windowN', 'wholeThread'].forEach(id => $(id).addEventListener('change', run));
   $('search').addEventListener('input', render);
   $('btnCsv').addEventListener('click', exportCsv);
+  $('btnForgetScan').addEventListener('click', () => {
+    if (!confirm('Forget the scanned Instagram data saved in this browser? Your send list and sent history are kept.')) return;
+    idbDelete('threads').catch(() => {});
+    threads = [];
+    analysis = null;
+    ['controls', 'stats', 'tabs', 'toolbar'].forEach(id => $(id).classList.remove('visible'));
+    updatePanels();
+    renderFollowup();
+  });
   $('btnAddToSend').addEventListener('click', () => {
     if (!analysis) return;
     const want = activeTab === 'responded';
@@ -854,6 +898,7 @@
     t.classList.add('active');
     activeTab = t.dataset.tab;
     render();
+    saveUiState();
   }));
 
   $('fuTemplate').addEventListener('input', () => { localStorage.setItem('fuTemplate', $('fuTemplate').value); renderFollowup(); });
@@ -871,6 +916,7 @@
     b.classList.add('active');
     fuView = b.dataset.view;
     renderFollowup();
+    saveUiState();
   }));
   $('btnClearSent').addEventListener('click', () => {
     if (!sentLog.length) return;
@@ -882,7 +928,26 @@
   });
   const savedTmpl = localStorage.getItem('fuTemplate');
   if (savedTmpl) $('fuTemplate').value = savedTmpl;
+
+  // ---------- restore where you left off ----------
+  let uiState = {};
+  try { uiState = JSON.parse(localStorage.getItem('uiState') || '{}'); } catch (e) {}
+  if (uiState.windowN) $('windowN').value = uiState.windowN;
+  if (uiState.wholeThread) $('wholeThread').checked = true;
+  if (['silent', 'responded'].includes(uiState.activeTab)) activeTab = uiState.activeTab;
+  if (['tosend', 'sent'].includes(uiState.fuView)) fuView = uiState.fuView;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === activeTab));
+  document.querySelectorAll('.fu-subtab').forEach(x => x.classList.toggle('active', x.dataset.view === fuView));
   renderFollowup();
+  idbLoad('threads').then(saved => {
+    if (!saved || !saved.length) return;
+    threads = saved;
+    detectOwner();
+    if (uiState.owner && [...$('ownerSelect').options].some(o => o.value === uiState.owner)) {
+      $('ownerSelect').value = uiState.owner;
+    }
+    run();
+  }).catch(() => {});
 })();
 </script>
 </body>

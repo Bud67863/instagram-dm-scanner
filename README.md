@@ -49,6 +49,14 @@ The **✉️ Message send** tab turns a list into ready-to-send DMs:
 
 Pressing **Send is always your click**. Instagram has no API that lets personal accounts send DMs, and unattended auto-senders are the fastest way to get an account disabled. One human click per send keeps you safe.
 
+## Persistence
+
+Everything picks up where you left off, even after closing the browser:
+
+- Your **template, send list, and sent history** are kept in localStorage
+- **Scan results** are kept in IndexedDB — only who/when/response-type, never message text — along with your scan settings and which tabs you were on
+- **✕ Forget scan data** (in the scan controls) wipes the stored scan; clearing the browser's site data wipes everything
+
 ## Notes
 
 - Works with the export's `your_instagram_activity/messages/inbox/…/message_*.json` layout (older exports with `messages/inbox/…` work too). Group chats are supported.
