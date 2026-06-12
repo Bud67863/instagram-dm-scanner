@@ -172,10 +172,6 @@
   .fu-actionsbar { margin-top: 12px; }
   .fu-actionsbar .chk { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .fu-note { margin-top: 12px; font-size: 12.5px; color: var(--accent2); line-height: 1.5; }
-  .fu-autofill { margin-top: 10px; font-size: 13px; color: var(--muted); }
-  .fu-autofill summary { cursor: pointer; color: var(--text); font-weight: 600; font-size: 13px; }
-  .fu-autofill ol { margin: 10px 0 4px 22px; line-height: 1.8; }
-  .fu-autofill a { color: var(--accent2); }
   #pasteArea { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .fu-msgtext { white-space: pre-wrap; }
   .fu-done td { opacity: .45; }
@@ -290,15 +286,7 @@
         <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen"></textarea>
         <button class="primary" id="btnDoPaste">Import pasted rows</button>
       </div>
-      <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. With auto-fill set up (below), <b>Open DM</b> lands in the thread with your message already typed. Without it, the message is on your clipboard &mdash; paste and send.</p>
-      <details class="fu-autofill">
-        <summary>⚡ Set up auto-fill — skip the paste (one-time, ~1 minute)</summary>
-        <ol>
-          <li>Install the <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a> browser extension</li>
-          <li>Then <a href="instagram-dm-autofill.user.js" target="_blank" rel="noopener">click here to install the auto-fill script</a> &mdash; Tampermonkey shows an install screen, hit Install</li>
-          <li>That&rsquo;s it. <b>Open DM ↗</b> now opens the thread with your message already typed in the box &mdash; you just press Send. The script only types; it can&rsquo;t send.</li>
-        </ol>
-      </details>
+      <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. <b>Copy &amp; open DM</b> puts the personalized message on your clipboard and opens the thread: paste (⌘V) and hit send.</p>
     </div>
     <input type="file" id="fileInputCsv" accept=".csv,.tsv,.txt" style="display:none">
     <table id="fuTable">
@@ -687,11 +675,10 @@
       if (p.username) {
         const bGo = document.createElement('button');
         bGo.className = 'primary';
-        bGo.textContent = 'Open DM ↗';
+        bGo.textContent = 'Copy & open DM ↗';
         bGo.addEventListener('click', async () => {
-          await copyText(msg); // clipboard fallback if auto-fill isn't installed
-          const b64 = btoa(unescape(encodeURIComponent(msg)));
-          window.open('https://ig.me/m/' + encodeURIComponent(p.username) + '#igprefill=' + encodeURIComponent(b64), '_blank', 'noopener');
+          await copyText(msg);
+          window.open('https://ig.me/m/' + encodeURIComponent(p.username), '_blank', 'noopener');
           tr.classList.add('fu-done');
           bGo.textContent = 'Opened ✓';
         });

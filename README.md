@@ -42,18 +42,9 @@ The **✉️ Message send** tab turns a list into ready-to-send DMs:
 
 - Write one message template with placeholders: `{name}` (first name), `{full_name}`, `{username}`, or any column from your CSV (e.g. `{topic}`)
 - Build the list by **importing a CSV** / **pasting rows straight from Excel or Google Sheets** (see [sample-list.csv](sample-list.csv) — needs a `username` or `name` header), or scan your export and it defaults to people who haven't responded
-- Each row gets an **Open DM** button that opens that person's thread (`ig.me/m/<username>`) with the personalized message ready to go
+- Each row gets a **Copy & open DM** button: it copies the personalized message to your clipboard and opens that person's thread (`ig.me/m/<username>`) — paste and hit send
 
-### Auto-fill (skip the paste)
-
-One-time setup so the message is **already typed in the compose box** when the thread opens:
-
-1. Install the [Tampermonkey](https://www.tampermonkey.net/) browser extension
-2. Open the app → Message send tab → "Set up auto-fill" → install the [auto-fill userscript](https://bud67863.github.io/instagram-dm-scanner/instagram-dm-autofill.user.js)
-
-The app passes each message in the link's `#igprefill=` fragment; the userscript decodes it and types it into the box. Without the userscript, the message is copied to your clipboard instead — paste and send.
-
-Pressing **Send is always your click**. Instagram has no API that lets personal accounts send DMs, and unattended auto-senders are the fastest way to get an account disabled. The script types; it never sends.
+Pressing **Send is always your click**. Instagram has no API that lets personal accounts send DMs, and unattended auto-senders are the fastest way to get an account disabled. One human click per send keeps you safe.
 
 ## Notes
 
