@@ -207,7 +207,7 @@
         <button id="btnClearList" style="display:none">✕ Clear send list</button>
       </div>
       <div id="pasteArea" style="display:none">
-        <textarea id="pasteCsvText" rows="5" placeholder="Paste rows copied from Excel / Google Sheets / a .csv — first row must be headers, e.g.&#10;username,name&#10;mayachen,Maya Chen&#10;https://www.instagram.com/jakerivera/,Jake Rivera"></textarea>
+        <textarea id="pasteCsvText" rows="5" placeholder="Paste rows from Excel / Google Sheets / a .csv — headers are optional. Bare links or usernames work too, one per line:&#10;https://www.instagram.com/mayachen/&#10;@jakerivera&#10;dannykim"></textarea>
         <button class="primary" id="btnDoPaste">Import pasted rows</button>
       </div>
       <p class="fu-note">You press Send on each message &mdash; nothing is ever sent for you. <b>Copy &amp; open DM</b> puts the personalized message on your clipboard and opens the thread: paste (⌘V) and hit send. Each one is logged to the <b>Sent</b> tab (saved in this browser) so you never message the same person twice by accident &mdash; if you opened a DM but didn&rsquo;t send, remove it from Sent with ✕.</p>
@@ -625,27 +625,79 @@
     return /^[a-z0-9._]{1,30}$/.test(s) ? s : '';
   }
 
+  const U_ALIASES = ['username', 'handle', 'ig', 'insta', 'instagram', 'user'];
+  const L_ALIASES = ['link', 'url', 'profile', 'profile_url', 'profile_link', 'instagram_url', 'instagram_link', 'ig_url', 'ig_link'];
+  const N_ALIASES = ['name', 'full_name', 'first_name', 'person'];
+
   function importList(text) {
     const rows = parseDelimited(text);
-    if (rows.length < 2) throw new Error('Need a header row plus at least one person.');
-    const headers = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
-    const uIdx = headers.findIndex(h => ['username', 'handle', 'ig', 'insta', 'instagram', 'user'].includes(h));
-    const lIdx = headers.findIndex(h => ['link', 'url', 'profile', 'profile_url', 'profile_link', 'instagram_url', 'instagram_link', 'ig_url', 'ig_link'].includes(h));
-    const nIdx = headers.findIndex(h => ['name', 'full_name', 'first_name', 'person'].includes(h));
-    if (uIdx === -1 && lIdx === -1 && nIdx === -1) throw new Error('No "username", "link", or "name" column found. Your headers: ' + headers.join(', '));
-    const parsed = rows.slice(1).map(r => {
-      const fields = {};
-      headers.forEach((h, i) => fields[h] = (r[i] || '').trim());
-      let username = uIdx >= 0 ? extractUsername(fields[headers[uIdx]]) : '';
-      if (!username && lIdx >= 0) username = extractUsername(fields[headers[lIdx]]);
-      if (!username) { // last resort: a profile link in any column
-        for (const v of Object.values(fields)) {
-          if (/instagram\.com\//i.test(v)) { username = extractUsername(v); if (username) break; }
+    if (!rows.length) throw new Error('Nothing to import — the file looks empty.');
+    const maybeHeader = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+    const hasHeader = maybeHeader.some(h => U_ALIASES.includes(h) || L_ALIASES.includes(h) || N_ALIASES.includes(h));
+
+    let parsed;
+    if (hasHeader) {
+      const headers = maybeHeader;
+      const uIdx = headers.findIndex(h => U_ALIASES.includes(h));
+      const lIdx = headers.findIndex(h => L_ALIASES.includes(h));
+      const nIdx = headers.findIndex(h => N_ALIASES.includes(h));
+      parsed = rows.slice(1).map(r => {
+        const fields = {};
+        headers.forEach((h, i) => fields[h] = (r[i] || '').trim());
+        let username = uIdx >= 0 ? extractUsername(fields[headers[uIdx]]) : '';
+        if (!username && lIdx >= 0) username = extractUsername(fields[headers[lIdx]]);
+        if (!username) { // last resort: a profile link in any column
+          for (const v of Object.values(fields)) {
+            if (/instagram\.com\//i.test(v)) { username = extractUsername(v); if (username) break; }
+          }
+        }
+        const full_name = (nIdx >= 0 && fields[headers[nIdx]]) ? fields[headers[nIdx]] : username;
+        return { username, full_name, fields };
+      });
+    } else {
+      // no header row — infer what each column holds from its content
+      const cols = Math.max(...rows.map(r => r.length));
+      const score = Array.from({ length: cols }, () => ({ url: 0, handleish: 0, nameish: 0 }));
+      for (const r of rows) {
+        for (let i = 0; i < cols; i++) {
+          const v = (r[i] || '').trim();
+          if (!v) continue;
+          if (/instagram\.com\//i.test(v) || v.startsWith('@')) score[i].url++;
+          else if (/^[a-z0-9._]+$/i.test(v)) score[i].handleish++;
+          else if (/\S\s+\S/.test(v)) score[i].nameish++;
         }
       }
-      const full_name = (nIdx >= 0 && fields[headers[nIdx]]) ? fields[headers[nIdx]] : username;
-      return { username, full_name, fields };
-    }).filter(p => p.username || p.full_name);
+      let uCol = -1, best = 0;
+      for (let i = 0; i < cols; i++) {
+        const s = score[i].url * 2 + score[i].handleish;
+        if (score[i].url + score[i].handleish > 0 && s > best) { best = s; uCol = i; }
+      }
+      let nCol = -1; best = 0;
+      for (let i = 0; i < cols; i++) {
+        if (i !== uCol && score[i].nameish > best) { best = score[i].nameish; nCol = i; }
+      }
+      if (uCol === -1 && nCol === -1) throw new Error("Couldn't find usernames, profile links, or names in the data.");
+      let dataRows = rows;
+      // tolerate an unrecognized header row: first cell yields no username but most rows do
+      if (uCol >= 0 && rows.length >= 3 && !extractUsername(rows[0][uCol])) {
+        const ok = rows.slice(1).filter(r => extractUsername(r[uCol])).length;
+        if (ok / (rows.length - 1) > 0.6) dataRows = rows.slice(1);
+      }
+      parsed = dataRows.map(r => {
+        const fields = {};
+        r.forEach((v, i) => fields['col_' + (i + 1)] = (v || '').trim());
+        let username = uCol >= 0 ? extractUsername(r[uCol]) : '';
+        if (!username) {
+          for (const v of r) {
+            if (/instagram\.com\//i.test(v || '')) { username = extractUsername(v); if (username) break; }
+          }
+        }
+        const full_name = (nCol >= 0 && (r[nCol] || '').trim()) ? r[nCol].trim() : username;
+        return { username, full_name, fields };
+      });
+    }
+    parsed = parsed.filter(p => p.username || p.full_name);
+    if (!parsed.length) throw new Error('No usable rows found in the import.');
     addToSendList(parsed);
     $('pasteArea').style.display = 'none';
   }

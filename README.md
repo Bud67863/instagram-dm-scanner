@@ -41,7 +41,8 @@ Click **Try sample data** to see it working without a real export.
 The **✉️ Message send** tab turns a list into ready-to-send DMs:
 
 - Write one message template with placeholders: `{name}` (first name), `{full_name}`, `{username}`, or any column from your CSV (e.g. `{topic}`)
-- Build the list explicitly — it never fills itself. **Import a CSV** / **paste rows straight from Excel or Google Sheets** (see [sample-list.csv](sample-list.csv) — needs a `username`, `link`, or `name` header), or scan your export and use the **Add to send list** button on either scan tab. All sources merge and dedupe; the list is saved in your browser across visits
+- Build the list explicitly — it never fills itself. **Import a CSV** / **paste rows straight from Excel or Google Sheets** (see [sample-list.csv](sample-list.csv)), or scan your export and use the **Add to send list** button on either scan tab. All sources merge and dedupe; the list is saved in your browser across visits
+- Headers are optional: with a `username`/`link`/`name` header row it maps columns by name; without one it figures out the columns from the content — a file that's just bare profile links, one per line, imports fine
 - Usernames are accepted in any form: `mayachen`, `@mayachen`, or a profile link like `https://www.instagram.com/mayachen/` — in a `username` column, a `link`/`url`/`profile` column, or anywhere in the row. Post/reel links (`instagram.com/p/…`) are ignored since they don't identify a person
 - The scan results show as two tabs — **❌ Haven't responded** and **✅ Have responded** — each with an add-to-send-list button (1:1 conversations only; group chats are shown but can't be deep-linked)
 - Each row gets a **Copy & open DM** button: it copies the personalized message to your clipboard and opens that person's thread (`ig.me/m/<username>`) — paste and hit send
